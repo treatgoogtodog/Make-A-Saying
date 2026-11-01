@@ -4,8 +4,18 @@ import com.badlogic.gdx.ApplicationListener;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
+import com.makeasaying.data.input.ActionLoader;
+import com.makeasaying.data.input.BindingsLoader;
 import com.makeasaying.engine.async.Jobs;
 import com.makeasaying.engine.config.EngineConfig;
+import com.makeasaying.engine.input.ActionRegistry;
+import com.makeasaying.engine.input.Actions;
+import com.makeasaying.engine.input.ContextBindings;
+import com.makeasaying.engine.input.InputManager;
+import com.makeasaying.engine.input.InputState;
+import com.makeasaying.engine.input.replay.InputRecorder;
+import com.makeasaying.engine.input.replay.InputReplayer;
+import com.makeasaying.engine.input.replay.ReplayData;
 import com.makeasaying.engine.loop.FixedTimestep;
 import com.makeasaying.engine.loop.FrameTimer;
 import com.makeasaying.engine.render.VirtualScreen;
@@ -13,9 +23,11 @@ import com.makeasaying.engine.util.Log;
 import com.makeasaying.engine.util.LogCategory;
 import com.makeasaying.game.demo.DemoScene;
 
+import java.nio.file.Path;
+
 /**
- * Main game entry point managing the 1/60s fixed-timestep loop,
- * background Jobs queue, VirtualScreen integer-scaled rendering, and FrameTimer.
+ * Main game entry point managing the fixed-timestep loop, input layer,
+ * background Jobs, and VirtualScreen integer-scaled rendering.
  */
 public class PlatformerGame implements ApplicationListener {
     private final EngineConfig config;
@@ -25,6 +37,14 @@ public class PlatformerGame implements ApplicationListener {
     private Jobs jobs;
     private FrameTimer frameTimer;
     private SpriteBatch sceneBatch;
+
+    private ActionRegistry actionRegistry;
+    private ContextBindings contextBindings;
+    private InputManager inputManager;
+
+    private InputRecorder recorder;
+    private InputReplayer replayer;
+    private ReplayData lastRecordedReplay;
 
     // Temporary demo scene - single deletion point for M3
     private DemoScene demoScene;
@@ -36,7 +56,7 @@ public class PlatformerGame implements ApplicationListener {
     @Override
     public void create() {
         Log.info(LogCategory.ENGINE,
-            "Initializing game loop and rendering. Virtual: %dx%d, TickRate: %d, Workers: %d, Border: %s",
+            "Initializing game. Virtual: %dx%d, TickRate: %d, Workers: %d, Border: %s",
             config.virtualWidth(), config.virtualHeight(), config.tickRate(), config.workerThreads(), config.borderColor());
 
         this.timestep = new FixedTimestep(config.tickRate());
@@ -48,6 +68,19 @@ public class PlatformerGame implements ApplicationListener {
         this.sceneBatch = new SpriteBatch();
         this.sceneBatch.getProjectionMatrix().setToOrtho2D(0, 0, config.virtualWidth(), config.virtualHeight());
 
+        // Load input actions and bindings from data files
+        try {
+            this.actionRegistry = ActionLoader.load(Path.of("content/actions.json"));
+            this.contextBindings = BindingsLoader.load(Path.of("content/bindings.json"), actionRegistry);
+        } catch (Exception e) {
+            Log.error(LogCategory.DATA, "Failed to load actions or bindings, using defaults", e);
+            throw new RuntimeException("Input setup failed: " + e.getMessage(), e);
+        }
+
+        this.inputManager = new InputManager(actionRegistry, contextBindings);
+        Gdx.input.setInputProcessor(inputManager);
+
+        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m2_hash");
         this.demoScene = new DemoScene();
     }
 
@@ -74,7 +107,49 @@ public class PlatformerGame implements ApplicationListener {
 
         long updateStart = System.nanoTime();
         for (int i = 0; i < ticks; i++) {
-            demoScene.tick(timestep.getCurrentTick());
+            boolean isFirstTickOfFrame = (i == 0);
+            long currentTick = timestep.getCurrentTick();
+
+            // Tick input manager (events drained only on first tick of frame)
+            inputManager.tick(currentTick, isFirstTickOfFrame);
+
+            // Handle global debug record/playback commands
+            InputState globalState = inputManager.getGlobalState();
+            if (globalState.isPressed(Actions.DEBUG_RECORD)) {
+                if (recorder.isRecording()) {
+                    recorder.stop();
+                    lastRecordedReplay = recorder.toReplayData();
+                    Log.info(LogCategory.INPUT, "Replay recording stopped. Recorded %d transition frames.",
+                        lastRecordedReplay.frames().size());
+                } else {
+                    recorder.start();
+                    Log.info(LogCategory.INPUT, "Replay recording started.");
+                }
+            }
+
+            if (globalState.isPressed(Actions.DEBUG_PLAYBACK)) {
+                if (lastRecordedReplay != null) {
+                    replayer = new InputReplayer(lastRecordedReplay, actionRegistry);
+                    replayer.start();
+                    Log.info(LogCategory.INPUT, "Replay playback started.");
+                } else {
+                    Log.warn(LogCategory.INPUT, "No replay recorded yet. Press F5 first.");
+                }
+            }
+
+            // Determine active input state (live input or replayed input)
+            InputState activeState;
+            if (replayer != null && replayer.isPlaying()) {
+                replayer.tick(currentTick);
+                activeState = replayer.getState();
+            } else {
+                activeState = inputManager.getState();
+                if (recorder.isRecording()) {
+                    recorder.recordTick(currentTick, inputManager.getContextStack().getActiveContext(), activeState);
+                }
+            }
+
+            demoScene.tick(currentTick, activeState);
         }
         long updateEnd = System.nanoTime();
 
@@ -98,8 +173,10 @@ public class PlatformerGame implements ApplicationListener {
 
         // 5. Update window title once per second
         if (frameTimer.shouldUpdateTitle(frameStart)) {
-            Gdx.graphics.setTitle(String.format("%s [Upd: %.2fms | Rnd: %.2fms | FPS: %d]",
+            String recordStatus = recorder.isRecording() ? " [REC]" : (replayer != null && replayer.isPlaying() ? " [PLAY]" : "");
+            Gdx.graphics.setTitle(String.format("%s%s [Upd: %.2fms | Rnd: %.2fms | FPS: %d]",
                 config.windowTitle(),
+                recordStatus,
                 frameTimer.getCachedAvgUpdate(),
                 frameTimer.getCachedAvgRender(),
                 Gdx.graphics.getFramesPerSecond()));
@@ -109,17 +186,13 @@ public class PlatformerGame implements ApplicationListener {
     @Override
     public void pause() {
         Log.info(LogCategory.ENGINE, "Game paused");
-        if (timestep != null) {
-            timestep.setPaused(true);
-        }
+        if (timestep != null) timestep.setPaused(true);
     }
 
     @Override
     public void resume() {
         Log.info(LogCategory.ENGINE, "Game resumed");
-        if (timestep != null) {
-            timestep.setPaused(false);
-        }
+        if (timestep != null) timestep.setPaused(false);
     }
 
     @Override
@@ -135,19 +208,15 @@ public class PlatformerGame implements ApplicationListener {
         return config;
     }
 
-    public FixedTimestep getTimestep() {
-        return timestep;
+    public InputManager getInputManager() {
+        return inputManager;
     }
 
-    public VirtualScreen getVirtualScreen() {
-        return virtualScreen;
+    public ActionRegistry getActionRegistry() {
+        return actionRegistry;
     }
 
-    public Jobs getJobs() {
-        return jobs;
-    }
-
-    public FrameTimer getFrameTimer() {
-        return frameTimer;
+    public ContextBindings getContextBindings() {
+        return contextBindings;
     }
 }

@@ -16,7 +16,7 @@ Per Section 7.2 and 7.3 of `AGENTS.md`, systems in the engine run in a fixed, do
 
 ## Simulation Tick Pipeline (Fixed Timestep 1/60s)
 1. **Cutscene Runner**: Advances active cutscene blocks and hops.
-2. **Input Collection**: Drains raw events from render thread queue into active context, updates per-entity `InputState`.
+2. **Input Collection**: In first tick of frame, drains raw queue (at most 1 transition per button per tick, trailing releases deferred to next tick); catch-up ticks suppress 'pressed'; updates digital axes with last-pressed-wins (DEC-004); swallows held keys on context change.
 3. **AI and Lua Behaviors**: Translates entity decisions into `InputState`.
 4. **Moving Platforms**: Updates positions of platforms first before carrying riders.
 5. **Movement and Collision**: Step custom AABB against tile grid (one axis at a time, integer pixel steps with subpixel remainder); carries riders; emits `onHitWall`, `onLand`, `onHitCeiling`.

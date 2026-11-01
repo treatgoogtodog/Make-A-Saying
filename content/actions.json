@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "actions": [
+    {
+      "id": "move_left",
+      "type": "button"
+    },
+    {
+      "id": "move_right",
+      "type": "button"
+    },
+    {
+      "id": "move_up",
+      "type": "button"
+    },
+    {
+      "id": "move_down",
+      "type": "button"
+    },
+    {
+      "id": "move_x",
+      "type": "axis",
+      "negativeButton": "move_left",
+      "positiveButton": "move_right"
+    },
+    {
+      "id": "move_y",
+      "type": "axis",
+      "negativeButton": "move_down",
+      "positiveButton": "move_up"
+    },
+    {
+      "id": "jump",
+      "type": "button"
+    },
+    {
+      "id": "attack",
+      "type": "button"
+    },
+    {
+      "id": "interact",
+      "type": "button"
+    },
+    {
+      "id": "cancel",
+      "type": "button",
+      "reserved": true
+    },
+    {
+      "id": "pause",
+      "type": "button",
+      "reserved": true
+    },
+    {
+      "id": "debug_record",
+      "type": "button"
+    },
+    {
+      "id": "debug_playback",
+      "type": "button"
+    }
+  ]
+}

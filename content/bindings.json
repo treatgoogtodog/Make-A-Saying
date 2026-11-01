@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "contexts": {
+    "global": {
+      "pause": [
+        "KEY_ESCAPE"
+      ],
+      "debug_record": [
+        "KEY_F5"
+      ],
+      "debug_playback": [
+        "KEY_F6"
+      ]
+    },
+    "gameplay": {
+      "move_left": [
+        "KEY_A",
+        "KEY_LEFT"
+      ],
+      "move_right": [
+        "KEY_D",
+        "KEY_RIGHT"
+      ],
+      "move_up": [
+        "KEY_W",
+        "KEY_UP"
+      ],
+      "move_down": [
+        "KEY_S",
+        "KEY_DOWN"
+      ],
+      "jump": [
+        "KEY_SPACE",
+        "KEY_Z"
+      ],
+      "attack": [
+        "KEY_X"
+      ],
+      "interact": [
+        "KEY_E",
+        "KEY_C"
+      ],
+      "cancel": [
+        "KEY_BACKSPACE"
+      ]
+    },
+    "menu": {
+      "move_up": [
+        "KEY_W",
+        "KEY_UP"
+      ],
+      "move_down": [
+        "KEY_S",
+        "KEY_DOWN"
+      ],
+      "interact": [
+        "KEY_ENTER",
+        "KEY_SPACE"
+      ],
+      "cancel": [
+        "KEY_BACKSPACE"
+      ]
+    },
+    "cutscene": {
+      "interact": [
+        "KEY_SPACE",
+        "KEY_ENTER"
+      ],
+      "cancel": [
+        "KEY_BACKSPACE"
+      ]
+    },
+    "editor": {
+      "cancel": [
+        "KEY_BACKSPACE"
+      ]
+    }
+  }
+}

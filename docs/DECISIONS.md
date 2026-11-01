@@ -43,3 +43,12 @@ Format for entries:
   - `VirtualScreenMath` separates viewport scaling calculation from GL context.
 - **Alternatives Considered**: 2x2 texture (rejected: too small at 1x without runtime scaling), single-precision float accumulator (rejected: precision loss across high-frequency frames).
 - **Reversibility**: Easy.
+
+---
+
+### DEC-004: Opposing Movement Direction Resolution (Last-Pressed-Wins)
+- **Date**: 2026-11-01
+- **Context**: When opposite directional inputs are held simultaneously (e.g. Left and Right on `move_x`), the engine must deterministically resolve the axis value {-1, 0, 1}.
+- **Choice**: Last-pressed-wins. The most recently pressed direction dictates the axis direction. If the winning key is subsequently released while the opposing key remains held, the remaining key immediately resumes dominance.
+- **Alternatives Considered**: Zero-cancel (Left + Right = 0; rejected: sticky feel during rapid direction reversals), First-pressed-wins (rejected: impedes modern responsive platformer controls).
+- **Reversibility**: Moderate.
