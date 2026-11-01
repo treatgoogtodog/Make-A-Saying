@@ -17,6 +17,7 @@ public final class Room {
     private final Map<RoomLayerType, RoomLayer> layers;
     private final List<SpawnPoint> spawnPoints;
     private final List<RoomEntityData> entities;
+    private final List<RoomExit> exits;
 
     public Room(
         String id,
@@ -26,6 +27,19 @@ public final class Room {
         Map<RoomLayerType, RoomLayer> layers,
         List<SpawnPoint> spawnPoints,
         List<RoomEntityData> entities
+    ) {
+        this(id, width, height, tilesetAliases, layers, spawnPoints, entities, Collections.emptyList());
+    }
+
+    public Room(
+        String id,
+        int width,
+        int height,
+        Map<String, String> tilesetAliases,
+        Map<RoomLayerType, RoomLayer> layers,
+        List<SpawnPoint> spawnPoints,
+        List<RoomEntityData> entities,
+        List<RoomExit> exits
     ) {
         if (id == null || id.isBlank()) throw new IllegalArgumentException("Room id must not be blank");
         if (width <= 0 || height <= 0) throw new IllegalArgumentException("Room dimensions must be positive");
@@ -37,6 +51,7 @@ public final class Room {
         this.layers = (layers != null) ? Collections.unmodifiableMap(new LinkedHashMap<>(layers)) : Collections.emptyMap();
         this.spawnPoints = (spawnPoints != null) ? List.copyOf(spawnPoints) : Collections.emptyList();
         this.entities = (entities != null) ? List.copyOf(entities) : Collections.emptyList();
+        this.exits = (exits != null) ? List.copyOf(exits) : Collections.emptyList();
     }
 
     public String id() {
@@ -86,5 +101,9 @@ public final class Room {
 
     public List<RoomEntityData> entities() {
         return entities;
+    }
+
+    public List<RoomExit> exits() {
+        return exits;
     }
 }

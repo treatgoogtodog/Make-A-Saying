@@ -3,3 +3,9 @@ dependencies {
     api "com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}"
     api "com.fasterxml.jackson.core:jackson-annotations:${jacksonVersion}"
 }
+
+task generateTestTiles(type: JavaExec) {
+    description = "Generates authored test tile sheets (test_area.png, test_area_b.png)"
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.makeasaying.data.tools.TileSheetGenerator'
+}

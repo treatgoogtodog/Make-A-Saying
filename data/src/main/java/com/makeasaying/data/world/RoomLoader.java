@@ -25,13 +25,24 @@ import java.util.Map;
  * Flips row order from top-to-bottom in file to Y-up in runtime memory (DEC-007).
  */
 public final class RoomLoader {
-    public static final int CURRENT_VERSION = 1;
+    public static final int CURRENT_VERSION = 2;
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static final MigrationChain MIGRATION_CHAIN = new MigrationChain("room", CURRENT_VERSION);
+
+    static {
+        // v1 -> v2: Add empty "exits" array if not present
+        MIGRATION_CHAIN.register(1, root -> {
+            if (!root.has("exits")) {
+                root.putArray("exits");
+            }
+        });
+    }
 
     private RoomLoader() {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"version", "id", "width", "height", "tilesets", "layers", "spawnPoints", "entities"})
+    @JsonPropertyOrder({"version", "id", "width", "height", "tilesets", "layers", "spawnPoints", "entities", "exits"})
     public record RoomData(
         int version,
         String id,
@@ -40,8 +51,22 @@ public final class RoomLoader {
         List<TilesetAliasData> tilesets,
         Map<String, List<String>> layers,
         List<SpawnPointData> spawnPoints,
-        List<EntityInstanceData> entities
-    ) {}
+        List<EntityInstanceData> entities,
+        List<RoomExitData> exits
+    ) {
+        public RoomData(
+            int version,
+            String id,
+            int width,
+            int height,
+            List<TilesetAliasData> tilesets,
+            Map<String, List<String>> layers,
+            List<SpawnPointData> spawnPoints,
+            List<EntityInstanceData> entities
+        ) {
+            this(version, id, width, height, tilesets, layers, spawnPoints, entities, Collections.emptyList());
+        }
+    }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"alias", "id"})
@@ -50,6 +75,18 @@ public final class RoomLoader {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"id", "x", "y"})
     public record SpawnPointData(String id, int x, int y) {}
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"id", "x", "y", "width", "height", "targetRoom", "targetSpawn"})
+    public record RoomExitData(
+        String id,
+        int x,
+        int y,
+        @com.fasterxml.jackson.annotation.JsonProperty("width") @com.fasterxml.jackson.annotation.JsonAlias({"w"}) int width,
+        @com.fasterxml.jackson.annotation.JsonProperty("height") @com.fasterxml.jackson.annotation.JsonAlias({"h"}) int height,
+        String targetRoom,
+        String targetSpawn
+    ) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @JsonPropertyOrder({"instanceId", "definition", "x", "y", "overrides"})
@@ -69,16 +106,18 @@ public final class RoomLoader {
 
         RoomData data;
         try {
-            data = MAPPER.readValue(path.toFile(), RoomData.class);
+            com.fasterxml.jackson.databind.JsonNode rootNode = MAPPER.readTree(path.toFile());
+            if (rootNode instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
+                MIGRATION_CHAIN.migrate(objectNode);
+                data = MAPPER.treeToValue(objectNode, RoomData.class);
+            } else {
+                throw new IOException("Root of room file must be a JSON object: " + path);
+            }
         } catch (Exception e) {
             Log.error(LogCategory.DATA, "Failed to parse room file: %s", e, path);
+            if (e instanceof IOException ioException) throw ioException;
+            if (e instanceof IllegalArgumentException iae) throw iae;
             throw new IOException("Malformed room file: " + path, e);
-        }
-
-        if (data.version() > CURRENT_VERSION) {
-            Log.error(LogCategory.DATA, "Unknown newer room version %d in %s (max supported is %d)",
-                data.version(), path, CURRENT_VERSION);
-            throw new IllegalArgumentException("Unknown newer room version: " + data.version());
         }
 
         return fromData(data);
@@ -140,6 +179,15 @@ public final class RoomLoader {
             }
         }
 
+        List<com.makeasaying.engine.world.RoomExit> exits = new ArrayList<>();
+        if (data.exits() != null) {
+            for (RoomExitData ed : data.exits()) {
+                exits.add(new com.makeasaying.engine.world.RoomExit(
+                    ed.id(), ed.x(), ed.y(), ed.width(), ed.height(), ed.targetRoom(), ed.targetSpawn()
+                ));
+            }
+        }
+
         return new Room(
             data.id(),
             width,
@@ -147,7 +195,8 @@ public final class RoomLoader {
             aliasMap,
             layerMap,
             spawnPoints,
-            entities
+            entities,
+            exits
         );
     }
 
@@ -196,6 +245,19 @@ public final class RoomLoader {
             ));
         }
 
+        List<RoomExitData> exitData = new ArrayList<>();
+        for (com.makeasaying.engine.world.RoomExit exit : room.exits()) {
+            exitData.add(new RoomExitData(
+                exit.id(),
+                exit.x(),
+                exit.y(),
+                exit.width(),
+                exit.height(),
+                exit.targetRoom(),
+                exit.targetSpawn()
+            ));
+        }
+
         return new RoomData(
             version,
             room.id(),
@@ -204,7 +266,8 @@ public final class RoomLoader {
             tilesetEntries,
             layersData,
             spawnData,
-            entityData
+            entityData,
+            exitData
         );
     }
 }

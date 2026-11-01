@@ -1,5 +1,6 @@
 package com.makeasaying.data.world;
 
+import com.makeasaying.data.tools.TileSheetGenerator;
 import com.makeasaying.engine.entity.TileShape;
 import com.makeasaying.engine.world.TileDef;
 import com.makeasaying.engine.world.TileSheetCoord;

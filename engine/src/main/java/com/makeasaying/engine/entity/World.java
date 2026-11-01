@@ -26,6 +26,7 @@ public final class World {
     private final InputStateComponent[] inputStates = new InputStateComponent[MAX_ENTITIES];
     private final JumpStateComponent[] jumpStates = new JumpStateComponent[MAX_ENTITIES];
     private final com.makeasaying.engine.entity.components.PlatformComponent[] platforms = new com.makeasaying.engine.entity.components.PlatformComponent[MAX_ENTITIES];
+    private final com.makeasaying.engine.entity.components.RoomScopeComponent[] roomScopes = new com.makeasaying.engine.entity.components.RoomScopeComponent[MAX_ENTITIES];
 
     private final EntityEventQueue eventQueue;
     private final int[] freeIndices = new int[MAX_ENTITIES];
@@ -62,6 +63,7 @@ public final class World {
             inputStates[i] = null;
             jumpStates[i] = null;
             platforms[i] = null;
+            roomScopes[i] = null;
         }
 
         // Push free indices in reverse order so lowest index (1) is popped first
@@ -115,10 +117,26 @@ public final class World {
                 inputStates[index] = null;
                 jumpStates[index] = null;
                 platforms[index] = null;
+                roomScopes[index] = null;
                 freeIndices[freeCount++] = index;
             }
         }
         deferredDespawnsCount = 0;
+    }
+
+    /**
+     * Marks all living entities that do not have PERSISTENT_CARRIED room scope
+     * for deferred despawn, then immediately applies lifecycle changes.
+     */
+    public void despawnRoomLocalEntities() {
+        for (int i = 1; i < MAX_ENTITIES; i++) {
+            if (!alive[i]) continue;
+            com.makeasaying.engine.entity.components.RoomScopeComponent rs = roomScopes[i];
+            if (rs == null || rs.scope != com.makeasaying.engine.entity.components.RoomScopeComponent.Scope.PERSISTENT_CARRIED) {
+                destroyEntity(getIdByIndex(i));
+            }
+        }
+        applyDeferredLifecycle();
     }
 
     // Component attachments (returns null safely if entity ID is stale)
@@ -179,6 +197,14 @@ public final class World {
         return isAlive(id) ? platforms[EntityId.getIndex(id)] : null;
     }
 
+    public void setRoomScope(long id, com.makeasaying.engine.entity.components.RoomScopeComponent scope) {
+        if (isAlive(id)) roomScopes[EntityId.getIndex(id)] = scope;
+    }
+
+    public com.makeasaying.engine.entity.components.RoomScopeComponent getRoomScope(long id) {
+        return isAlive(id) ? roomScopes[EntityId.getIndex(id)] : null;
+    }
+
     // Fast indexed access for systems (iteration by index 1..MAX_ENTITIES)
 
     public boolean isAliveIndex(int index) {
@@ -215,6 +241,10 @@ public final class World {
 
     public com.makeasaying.engine.entity.components.PlatformComponent getPlatformByIndex(int index) {
         return platforms[index];
+    }
+
+    public com.makeasaying.engine.entity.components.RoomScopeComponent getRoomScopeByIndex(int index) {
+        return roomScopes[index];
     }
 
     public EntityEventQueue getEventQueue() {
@@ -282,6 +312,12 @@ public final class World {
                 h ^= Float.floatToIntBits(p.remainderX);
                 h *= 1099511628211L;
                 h ^= Float.floatToIntBits(p.remainderY);
+                h *= 1099511628211L;
+            }
+
+            com.makeasaying.engine.entity.components.RoomScopeComponent rs = roomScopes[i];
+            if (rs != null && rs.scope != null) {
+                h ^= rs.scope.ordinal();
                 h *= 1099511628211L;
             }
         }

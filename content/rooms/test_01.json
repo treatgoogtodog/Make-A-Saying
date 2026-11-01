@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "id": "test_01",
   "width": 40,
   "height": 12,
@@ -47,9 +47,9 @@
       "a:wall_01 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . a:wall_01",
       "a:wall_01 . . . . . . . . . . . . . . . . . . . . . . . . . a:one_way_01 a:one_way_01 a:one_way_01 a:one_way_01 a:one_way_01 . . . . . . . . a:wall_01",
       "a:wall_01 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . a:wall_01",
-      "a:wall_01 . . . . . . . a:wall_01 . . . . . . . . . a:one_way_01 a:one_way_01 a:one_way_01 a:one_way_01 a:one_way_01 . . . . . . . . . . . . . . . . a:wall_01",
-      "a:wall_01 . . . . . a:slope_r a:solid_01 a:wall_01 . . . a:slope_l . . . . . . . . . . . . . . . . . . . . . . . . . . a:wall_01",
-      "a:wall_01 . . . . a:slope_r a:fill_01 a:fill_01 a:fill_01 . . . a:fill_01 a:slope_l . . . . . . . . . . . . . . . . . . . . . . . . . a:wall_01",
+      "a:wall_01 . . . . . . . a:wall_01 . . . . . . . . . a:one_way_01 a:one_way_01 a:one_way_01 a:one_way_01 a:one_way_01 . . . . . . . . . . . . . . . . .",
+      "a:wall_01 . . . . . a:slope_r a:solid_01 a:wall_01 . . . a:slope_l . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+      "a:wall_01 . . . . a:slope_r a:fill_01 a:fill_01 a:fill_01 . . . a:fill_01 a:slope_l . . . . . . . . . . . . . . . . . . . . . . . . . .",
       "a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01"
     ],
     "decoration": [
@@ -86,7 +86,23 @@
       "id": "player_start",
       "x": 32,
       "y": 16
+    },
+    {
+      "id": "from_test_02",
+      "x": 580,
+      "y": 16
     }
   ],
-  "entities": [ ]
+  "entities": [ ],
+  "exits": [
+    {
+      "id": "to_test_02",
+      "x": 616,
+      "y": 16,
+      "width": 24,
+      "height": 48,
+      "targetRoom": "test_02",
+      "targetSpawn": "from_test_01"
+    }
+  ]
 }

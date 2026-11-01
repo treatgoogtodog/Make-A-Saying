@@ -22,7 +22,12 @@ Per Section 7.2 and 7.3 of `AGENTS.md`, systems in the engine run in a fixed, do
 5. **Movement and Collision (`MovementSystem`)**: Step custom AABB against tile grid (one axis at a time, integer pixel steps with subpixel remainder); stuck-body detection; drop-through on one-way platforms (down + jump suppresses jump buffer); grounded slope surface sampling (`feetX - 1` and `feetX`) and slope snapping (`slopeSnapPx`); emits `HIT_WALL`, `LANDED`, `HIT_CEILING`.
 6. **Combat**: Hurtbox / Hitbox overlap, damage calculations, recoil impulses.
 7. **Death System**: State machine transitions (`CEASE` -> `COLLAPSE` / `FALLING` -> `LANDED` -> `RESOLVE`), slope checks, emits `entity_died`.
-8. **Triggers and Zones**: Overlap checks for triggers, camera bounds, room exits.
+8. **Triggers and Zones**:
+   - Overlap checks for triggers, camera bounds, and room exits (`RoomExit`).
+   - Re-arms disabled exits once player collider clears their bounds.
+   - Advances `RoomTransitionManager` (`IDLE` -> `FADE_OUT` -> `HOLD_WAIT_SWAP` -> `FADE_IN`).
+   - When transition is active, entity systems (AI, platforms, movement) are frozen while input layer keeps recording and draining.
+   - At swap point in `HOLD_WAIT_SWAP`, if target room is ready, executes atomic room swap: despawns room-local entities, resets player kinematics and jump state, recomputes grounded on target grid, disables arrival exit, and increments `visited` in `RoomStateStore`. If target room is not ready, tick advance is suspended, delta discarded, and Jobs drained until ready.
 9. **Event Dispatch**: Deterministic processing of tick event queue with cascade limit.
 10. **Animation Advance**: Advances tick-based `Animator` components and produces frame events.
 11. **Deferred Spawn / Despawn**: Entity lifecycle changes deferred to the very end of the tick.

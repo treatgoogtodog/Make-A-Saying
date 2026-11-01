@@ -187,3 +187,33 @@ Format for entries:
 - **Choice**: Row 0 in JSON represents the top of the room (`y = height - 1`), and the final row in JSON represents the bottom of the room (`y = 0`). `RoomLoader` inverts row index `height - 1 - y` into runtime memory, and `RoomWriter` inverts back on save.
 - **Alternatives Considered**: Storing row 0 as y=0 in JSON (rejected: makes hand-editing and visual inspection in text editors inverted upside down).
 - **Reversibility**: Medium.
+
+---
+
+### DEC-018: Deterministic Transition Loading Delay
+- **Date**: 2026-11-01
+- **Context**: If the target room is not yet loaded into memory when the transition state machine reaches the swap point (`HOLD_WAIT_SWAP` after `holdTicks`), the simulation loop must remain completely deterministic regardless of variable worker I/O completion speed.
+- **Choice**: When waiting for an async room load during `HOLD_WAIT_SWAP`, simulation tick advance is suspended, the accumulator delta is discarded, the screen renders solid black, and background Jobs are drained. The simulation tick counter advances by the exact same number of ticks (12 + 4 + 12 = 28 ticks) whether the target room is ready immediately or delayed. If loading fails or exceeds 600 ticks (10 seconds), the transition aborts loudly, fades back in, and disables the exit until the player leaves its bounds.
+- **Alternatives Considered**: Advancing simulation ticks while waiting (rejected: causes replays and state hashes to diverge based on variable disk speed).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-019: Combined Game-State Hash
+- **Date**: 2026-11-01
+- **Context**: Principle 4.3 (Determinism) requires a repeatable state hash for test verification and replays across room transitions, but Principle 4.1 / DEC-002 prohibits `World` from depending on `RoomStateStore` or high-level game-flow states.
+- **Choice**: `GameStateHash` is implemented as an independent utility function combining `world.stateHash()`, active `roomId`, `transitionManager` state and progress tick, and `roomStateStore.stateHash()`. `World` remains decoupled and focused purely on entity component state.
+- **Alternatives Considered**: Embedding room state or roomId into `World` (rejected: violates separation of concerns and single responsibility).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-020: Input Handling During Room Transitions
+- **Date**: 2026-11-01
+- **Context**: Handling user input and replay input during room transition fades.
+- **Choice**:
+  1. The input layer continues to drain raw OS events and record every tick throughout transitions, ensuring replay streams remain aligned and no stale "pressed" events leak out after fade-in.
+  2. Entity simulation systems (PlayerControlSystem, PlatformSystem, MovementSystem) are frozen, so entity inputs are not applied to player movement.
+  3. Keys that remain held down after fade-in completes apply normally upon entering `IDLE`. Any tap that begins and ends entirely within the transition window is consumed without affecting gameplay.
+- **Alternatives Considered**: Dropping all input events during transitions (rejected: corrupts replay synchronization).
+- **Reversibility**: Easy.

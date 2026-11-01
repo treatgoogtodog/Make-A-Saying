@@ -9,7 +9,6 @@ import com.badlogic.gdx.utils.Disposable;
 import com.makeasaying.data.world.RoomGridBuilder;
 import com.makeasaying.data.world.RoomLoader;
 import com.makeasaying.data.world.RoomWatcher;
-import com.makeasaying.data.world.TileSheetGenerator;
 import com.makeasaying.data.world.TilesetLoader;
 import com.makeasaying.engine.async.Jobs;
 import com.makeasaying.engine.entity.ControlSource;
@@ -103,15 +102,6 @@ public final class DemoSceneM5 implements Disposable {
 
         Path roomPath = Path.of("content/rooms/test_01.json");
         if (!Files.exists(roomPath)) roomPath = Path.of("..", "content/rooms/test_01.json");
-
-        // Ensure tile sheet PNG exists
-        if (!Files.exists(tsImagePath)) {
-            try {
-                TileSheetGenerator.generateToFile(tsImagePath);
-            } catch (IOException e) {
-                Log.error(LogCategory.DATA, "Failed generating tile sheet PNG: %s", e, e.getMessage());
-            }
-        }
 
         try {
             Tileset tileset = TilesetLoader.load(tsPath);

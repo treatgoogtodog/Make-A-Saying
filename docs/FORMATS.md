@@ -144,9 +144,9 @@ This document defines all file formats used in the project, their schemas, units
 
 ## Room Format (`content/rooms/<id>.json`)
 - **Location**: `content/rooms/<id>.json`
-- **Current Version**: `1`
+- **Current Version**: `2`
 - **Fields**:
-  - `version` (int, required): File format version.
+  - `version` (int, required): File format version (`2`).
   - `id` (string, required): Stable ASCII room ID (`^[a-z0-9_.]+$`).
   - `width` (int, required): Width of room in tiles.
   - `height` (int, required): Height of room in tiles.
@@ -168,11 +168,22 @@ This document defines all file formats used in the project, their schemas, units
     - `x` (int, required): Spawn pixel X.
     - `y` (int, required): Spawn pixel Y.
     - `overrides` (map of string -> object, optional): Component property overrides.
+  - `exits` (list of objects, added in v2):
+    - `id` (string, required): Stable exit zone ID (`^[a-z0-9_.]+$`).
+    - `x` (int, required): Bottom-left pixel X in room space (Y-up).
+    - `y` (int, required): Bottom-left pixel Y in room space (Y-up).
+    - `width` / `w` (int, required): Width of trigger zone in pixels.
+    - `height` / `h` (int, required): Height of trigger zone in pixels.
+    - `targetRoom` (string, required): Stable ID of destination room.
+    - `targetSpawn` (string, required): Stable ID of spawn point in destination room.
 
-### Example Room JSON
+### Migration Path
+- `v1 -> v2`: If the `"exits"` array is missing, `MigrationChain` automatically inserts an empty array `"exits": []`.
+
+### Example Room JSON (v2)
 ```json
 {
-  "version": 1,
+  "version": 2,
   "id": "test_01",
   "width": 40,
   "height": 12,
@@ -195,6 +206,34 @@ This document defines all file formats used in the project, their schemas, units
       "y": 16
     }
   ],
-  "entities": []
+  "entities": [],
+  "exits": [
+    {
+      "id": "to_test_02",
+      "x": 616,
+      "y": 16,
+      "width": 24,
+      "height": 48,
+      "targetRoom": "test_02",
+      "targetSpawn": "from_test_01"
+    }
+  ]
 }
 ```
+
+---
+
+## Room Transition Configuration (`RoomTransitionConfig`)
+- `fadeOutTicks` (int, default `12`): Duration in simulation ticks for fading out to black.
+- `holdTicks` (int, default `4`): Minimum duration in simulation ticks to hold black before swap.
+- `fadeInTicks` (int, default `12`): Duration in simulation ticks for fading back in.
+- **Total Standard Duration**: 28 simulation ticks (roughly 0.47 seconds at 60 Hz).
+
+---
+
+## Test Tile Sheet Generation
+Test tilesets (`test_area.png` and `test_area_b.png`) can be regenerated deterministically via the dedicated Gradle task:
+```bash
+./gradlew generateTestTiles
+```
+The generator source code is maintained in `data/src/test/java/com/makeasaying/data/tools/TileSheetGenerator.java`.

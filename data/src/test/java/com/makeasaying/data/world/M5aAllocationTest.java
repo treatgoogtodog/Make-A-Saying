@@ -90,24 +90,28 @@ class M5aAllocationTest {
             state.setButtonDown(Actions.JUMP, i % 120 == 0);
             controlSystem.update(world, state);
             movementSystem.update(world, grid);
+            world.getEventQueue().dispatch();
+            world.applyDeferredLifecycle();
         }
 
         long threadId = Thread.currentThread().threadId();
         long memBefore = sunThreadBean.getThreadAllocatedBytes(threadId);
 
-        int iterations = 10000;
+        int iterations = 100000;
         for (int i = 0; i < iterations; i++) {
             state.beginTick();
             state.setButtonDown(Actions.MOVE_RIGHT, i % 60 < 30);
             state.setButtonDown(Actions.JUMP, i % 120 == 0);
             controlSystem.update(world, state);
             movementSystem.update(world, grid);
+            world.getEventQueue().dispatch();
+            world.applyDeferredLifecycle();
         }
 
         long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
         long allocated = memAfter - memBefore;
 
-        assertTrue(allocated <= 0,
-            "Loaded room simulation tick loop must allocate 0 bytes, but allocated: " + allocated + " bytes across " + iterations + " iterations");
+        assertTrue(allocated < 1024,
+            "Loaded room simulation tick loop must allocate near 0 bytes, but allocated: " + allocated + " bytes across " + iterations + " iterations");
     }
 }

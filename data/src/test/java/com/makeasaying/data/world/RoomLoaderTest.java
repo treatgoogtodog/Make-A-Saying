@@ -140,11 +140,18 @@ class RoomLoaderTest {
         assertEquals("a:solid_01", main.getToken(7, 2));
         assertEquals("a:wall_01", main.getToken(8, 2));
 
-        assertEquals(1, room.spawnPoints().size());
+        assertEquals(2, room.spawnPoints().size());
         SpawnPoint sp = room.spawnPoints().get(0);
         assertEquals("player_start", sp.id());
         assertEquals(32, sp.x());
         assertEquals(16, sp.y());
+        assertEquals("from_test_02", room.spawnPoints().get(1).id());
+
+        assertEquals(1, room.exits().size());
+        com.makeasaying.engine.world.RoomExit exit = room.exits().get(0);
+        assertEquals("to_test_02", exit.id());
+        assertEquals("test_02", exit.targetRoom());
+        assertEquals("from_test_01", exit.targetSpawn());
     }
 
     @Test
@@ -168,12 +175,27 @@ class RoomLoaderTest {
         Path authored = getAuthoredRoomPath();
         Room room = RoomLoader.load(authored);
         Path savePath = tempDir.resolve("saved_room.json");
-        RoomWriter.save(room, savePath, 1);
+        RoomWriter.save(room, savePath, RoomLoader.CURRENT_VERSION);
 
         String original = Files.readString(authored).replace("\r\n", "\n").trim();
         String saved = Files.readString(savePath).replace("\r\n", "\n").trim();
 
         assertEquals(original, saved, "Round-trip room serialization must be byte-identical");
+    }
+
+    @Test
+    void testLoadV1AndMigrateToV2() throws IOException {
+        Path v1Path = Path.of("src/test/resources/fixtures/rooms/test_01_v1.json");
+        if (!Files.exists(v1Path)) {
+            v1Path = Path.of("data/src/test/resources/fixtures/rooms/test_01_v1.json");
+        }
+        assertTrue(Files.exists(v1Path), "v1 fixture must exist at: " + v1Path);
+
+        Room room = RoomLoader.load(v1Path);
+        assertNotNull(room);
+        assertEquals("test_01", room.id());
+        assertEquals(1, room.spawnPoints().size());
+        assertTrue(room.exits().isEmpty(), "Migrated v1 room must have empty exits list");
     }
 
     @Test

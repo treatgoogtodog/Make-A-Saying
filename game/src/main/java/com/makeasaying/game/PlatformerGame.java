@@ -24,7 +24,8 @@ import com.makeasaying.engine.loop.FrameTimer;
 import com.makeasaying.engine.render.VirtualScreen;
 import com.makeasaying.engine.util.Log;
 import com.makeasaying.engine.util.LogCategory;
-import com.makeasaying.game.demo.DemoSceneM5;
+import com.makeasaying.engine.world.GameStateHash;
+import com.makeasaying.game.demo.DemoSceneM5b;
 
 import java.nio.file.Path;
 
@@ -52,7 +53,7 @@ public class PlatformerGame implements ApplicationListener {
     private InputReplayer replayer;
     private ReplayData lastRecordedReplay;
 
-    private DemoSceneM5 demoScene;
+    private DemoSceneM5b demoScene;
 
     public PlatformerGame(EngineConfig config) {
         this.config = config != null ? config : EngineConfig.defaultConfig();
@@ -101,8 +102,8 @@ public class PlatformerGame implements ApplicationListener {
             }
         });
 
-        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m5a_hash");
-        this.demoScene = new DemoSceneM5(movementTuning, jobs);
+        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m5b_hash");
+        this.demoScene = new DemoSceneM5b(movementTuning, jobs);
     }
 
     @Override
@@ -124,7 +125,10 @@ public class PlatformerGame implements ApplicationListener {
 
         // 2. Accumulate delta and advance fixed ticks
         float frameDelta = Gdx.graphics.getDeltaTime();
-        int ticks = timestep.advance(frameDelta);
+        if (demoScene.isWaitingForLoad()) {
+            timestep.discardAccumulator();
+        }
+        int ticks = demoScene.isWaitingForLoad() ? 0 : timestep.advance(frameDelta);
 
         long updateStart = System.nanoTime();
         for (int i = 0; i < ticks; i++) {

@@ -81,6 +81,11 @@ public final class FixedTimestep {
         return ticks;
     }
 
+    public void discardAccumulator() {
+        accumulator = 0.0;
+        alpha = 0f;
+    }
+
     public void setPaused(boolean paused) {
         this.paused = paused;
         if (paused) {
