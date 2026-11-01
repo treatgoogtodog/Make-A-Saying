@@ -164,7 +164,7 @@ public final class PlatformSystem {
                     // If riding pushed upward into ceiling:
                     if (MovementSystem.collidesAt(grid, c, b.x, b.y)) {
                         if (plat.crushMode == PlatformComponent.CrushMode.CRUSH) {
-                            world.getEventQueue().emit(EntityEventType.CRUSHED, entityId, (int) platformId);
+                            world.getEventQueue().emit(EntityEventType.CRUSHED, entityId, platformId, 0);
                         }
                     }
                 } else {
@@ -197,7 +197,7 @@ public final class PlatformSystem {
                         // Check if pushed entity overlaps solid tile
                         if (MovementSystem.collidesAt(grid, c, b.x, b.y)) {
                             if (plat.crushMode == PlatformComponent.CrushMode.CRUSH) {
-                                world.getEventQueue().emit(EntityEventType.CRUSHED, entityId, (int) platformId);
+                                world.getEventQueue().emit(EntityEventType.CRUSHED, entityId, platformId, 0);
                             }
                         }
                     }

@@ -214,8 +214,14 @@ class MovingPlatformTest {
         body.resetPosition(70, 20);
 
         AtomicInteger crushedCount = new AtomicInteger(0);
+        java.util.concurrent.atomic.AtomicLong crushedVictimId = new java.util.concurrent.atomic.AtomicLong(0);
+        java.util.concurrent.atomic.AtomicLong crushedPlatformId = new java.util.concurrent.atomic.AtomicLong(0);
         world.getEventQueue().subscribe(e -> {
-            if (e.type() == EntityEventType.CRUSHED) crushedCount.incrementAndGet();
+            if (e.type() == EntityEventType.CRUSHED) {
+                crushedCount.incrementAndGet();
+                crushedVictimId.set(e.entityId());
+                crushedPlatformId.set(e.targetId());
+            }
         });
 
         for (int i = 0; i < 20; i++) {
@@ -223,6 +229,8 @@ class MovingPlatformTest {
         }
 
         assertTrue(crushedCount.get() > 0, "CRUSH platform must emit CRUSHED event when squishing entity against wall");
+        assertEquals(entityId, crushedVictimId.get(), "CRUSHED event must identify victim entity ID");
+        assertEquals(platId, crushedPlatformId.get(), "CRUSHED event must identify crushing platform ID");
     }
 
     @Test
@@ -263,5 +271,50 @@ class MovingPlatformTest {
         assertEquals(0f, body.vx, 0.001f, "Leaving a platform must not inherit platform velocity (vx must remain 0)");
         assertEquals(tuning.jumpSpeedPerTick(), body.vy, 0.001f);
         assertEquals(0L, body.supportId, "Leaving platform must clear supportId");
+    }
+
+    @Test
+    void testAntiTunnelingEntityLandingOnMaxSpeedPlatform() {
+        // Platform at (50, 16) with width 48, height 16 (top surface at y=32), moving at 4 px/tick
+        long platId = world.createEntity();
+        PlatformComponent plat = new PlatformComponent(50, 16, 120, 16, 48, 16, 4.0f);
+        world.setPlatform(platId, plat);
+        world.applyDeferredLifecycle();
+
+        // Entity directly above platform top (y=32) at y=35, falling at max fall speed (6 px/tick)
+        body.resetPosition(64, 35);
+        body.grounded = false;
+        body.vy = -tuning.maxFallSpeedPerTick();
+
+        tick();
+
+        // Must not tunnel through platform into y < 32; must land precisely on platform top
+        assertTrue(body.grounded, "Entity falling at max speed must land on moving platform without tunneling");
+        assertEquals(32, body.y, "Must land precisely on platform top at y=32");
+        assertEquals(platId, body.supportId, "Must attach supportId to the moving platform");
+        assertEquals(0f, body.vy, 0.001f);
+    }
+
+    @Test
+    void testFastPlatformBlockedByThinWall() {
+        // 1-tile-wide solid wall at tx=5 (x=80..95)
+        for (int y = 0; y < 10; y++) grid.setTile(5, y, TileShape.SOLID);
+
+        // Fast platform moving right at 6 px/tick in BLOCK mode toward wall
+        long platId = world.createEntity();
+        PlatformComponent plat = new PlatformComponent(30, 16, 120, 16, 32, 32, 6.0f, 0, PlatformComponent.CrushMode.BLOCK);
+        world.setPlatform(platId, plat);
+        world.applyDeferredLifecycle();
+
+        // Entity between platform and wall at x=70 (right edge at 76, 4px from wall at 80)
+        body.resetPosition(70, 20);
+
+        for (int i = 0; i < 20; i++) {
+            tick();
+        }
+
+        // Fast platform must not skip or tunnel past the wall; must halt cleanly
+        assertTrue(plat.currentX + plat.width <= 80, "Fast BLOCK platform must halt before wall (right <= 80)");
+        assertTrue(body.x + collider.getRight(0) <= 80, "Entity must not be pushed past or through the thin wall");
     }
 }

@@ -71,12 +71,16 @@ public final class TileGrid {
 
     /**
      * Pure function returning floor height in pixels above the tile bottom for column c in 0..15.
-     * Per Architect specification:
+     * Per Architect specification (DEC-011):
      * - SLOPE_45_UP_RIGHT: c + 1
      * - SLOPE_45_UP_LEFT: 16 - c
      * - SOLID: 16
      * - ONE_WAY: 16
      * - EMPTY: 0
+     *
+     * Invariant: Callers guarantee localX is in 0..15 by computing localX as Math.floorMod(colX, tileSize)
+     * where tileSize is 16. In Java, floorMod(colX, 16) mathematically guarantees a range of [0, 15] for any
+     * positive, zero, or negative integer, preventing any IllegalArgumentException in hot simulation loops.
      */
     public static int floorHeightAt(TileShape shape, int localX) {
         if (localX < 0 || localX >= 16) {

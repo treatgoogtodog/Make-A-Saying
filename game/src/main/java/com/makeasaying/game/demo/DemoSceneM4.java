@@ -91,12 +91,17 @@ public final class DemoSceneM4 implements Disposable {
         grid.setTile(4, 1, TileShape.SOLID);
         grid.setTile(5, 1, TileShape.SLOPE_45_UP_LEFT);
 
-        // 3. One-way platform ledge at tx=8..12, ty=3 (y: 48)
-        for (int x = 8; x <= 12; x++) {
+        // 3. Slope next to a 2-tile solid wall: slope UP_RIGHT at tx=6, ty=1; wall at tx=7, ty=1..2
+        grid.setTile(6, 1, TileShape.SLOPE_45_UP_RIGHT);
+        grid.setTile(7, 1, TileShape.SOLID);
+        grid.setTile(7, 2, TileShape.SOLID);
+
+        // 4. One-way platform ledge at tx=9..12, ty=3 (y: 48)
+        for (int x = 9; x <= 12; x++) {
             grid.setTile(x, 3, TileShape.ONE_WAY);
         }
 
-        // 4. Solid ledge at tx=14..18, ty=5 (y: 80)
+        // 5. Solid ledge at tx=14..18, ty=5 (y: 80)
         for (int x = 14; x <= 18; x++) {
             grid.setTile(x, 5, TileShape.SOLID);
         }
@@ -111,16 +116,22 @@ public final class DemoSceneM4 implements Disposable {
         world.setController(playerId, new ControllerComponent(ControlSource.PLAYER));
         world.setJumpState(playerId, new JumpStateComponent());
 
-        // Horizontal moving platform (x: 48 -> 112, y: 88, width: 36, height: 8, speed: 1.0)
+        // Horizontal moving platform with BLOCK mode (x: 48 -> 100, y: 88, width: 36, height: 8, speed: 1.0)
         horizPlatformId = world.createEntity();
         world.setPlatform(horizPlatformId, new PlatformComponent(
-            48, 88, 112, 88, 36, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
+            48, 88, 100, 88, 36, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
         ));
 
-        // Vertical moving platform (x: 140, y: 32 -> 96, width: 32, height: 8, speed: 1.0)
+        // Vertical moving platform with BLOCK mode (x: 130, y: 32 -> 96, width: 32, height: 8, speed: 1.0)
         vertPlatformId = world.createEntity();
         world.setPlatform(vertPlatformId, new PlatformComponent(
-            140, 32, 140, 96, 32, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
+            130, 32, 130, 96, 32, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
+        ));
+
+        // Descending platform with CRUSH mode (x: 230, y: 80 -> 16, width: 32, height: 8, speed: 1.0)
+        long crushPlatformId = world.createEntity();
+        world.setPlatform(crushPlatformId, new PlatformComponent(
+            230, 80, 230, 16, 32, 8, 1.0f, 15, PlatformComponent.CrushMode.CRUSH
         ));
 
         world.applyDeferredLifecycle();

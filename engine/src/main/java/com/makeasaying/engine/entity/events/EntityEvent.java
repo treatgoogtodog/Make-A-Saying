@@ -7,17 +7,27 @@ package com.makeasaying.engine.entity.events;
 public final class EntityEvent {
     private EntityEventType type;
     private long entityId;
+    private long targetId;
     private int detail;
 
     public EntityEvent() {}
 
     public EntityEvent(EntityEventType type, long entityId, int detail) {
-        set(type, entityId, detail);
+        this(type, entityId, 0L, detail);
+    }
+
+    public EntityEvent(EntityEventType type, long entityId, long targetId, int detail) {
+        set(type, entityId, targetId, detail);
     }
 
     public void set(EntityEventType type, long entityId, int detail) {
+        set(type, entityId, 0L, detail);
+    }
+
+    public void set(EntityEventType type, long entityId, long targetId, int detail) {
         this.type = type;
         this.entityId = entityId;
+        this.targetId = targetId;
         this.detail = detail;
     }
 
@@ -27,6 +37,10 @@ public final class EntityEvent {
 
     public long entityId() {
         return entityId;
+    }
+
+    public long targetId() {
+        return targetId;
     }
 
     public int detail() {

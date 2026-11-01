@@ -46,13 +46,17 @@ public final class EntityEventQueue {
     }
 
     public synchronized void emit(EntityEventType type, long entityId, int detail) {
+        emit(type, entityId, 0L, detail);
+    }
+
+    public synchronized void emit(EntityEventType type, long entityId, long targetId, int detail) {
         if (count >= capacity) {
             Log.error(LogCategory.ENTITY, "Event queue overflow! Dropping event %s for entity %d",
                 type, entityId);
             return;
         }
 
-        ringBuffer[tail].set(type, entityId, detail);
+        ringBuffer[tail].set(type, entityId, targetId, detail);
         tail = (tail + 1) % capacity;
         count++;
     }

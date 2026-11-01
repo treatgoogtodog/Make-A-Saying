@@ -268,4 +268,154 @@ class SlopeMovementTest {
         assertEquals(25, body.y, "Entity must not tunnel through slope; must stop exactly at surface height");
         assertEquals(0f, body.vy, 0.001f);
     }
+
+    @Test
+    void testWallTallerThanSlopeTopBlocksMovement() {
+        // Floor at ty=0
+        for (int x = 0; x <= 4; x++) grid.setTile(x, 0, TileShape.SOLID);
+        // Slope UP_RIGHT at (tx=2, ty=1)
+        grid.setTile(2, 1, TileShape.SLOPE_45_UP_RIGHT);
+        // Wall at tx=3: ground at ty=1 (y: 16..31) AND wall above at ty=2 (y: 32..47)
+        grid.setTile(3, 1, TileShape.SOLID);
+        grid.setTile(3, 2, TileShape.SOLID);
+
+        body.resetPosition(25, 16);
+        body.grounded = true;
+
+        inputState.setButtonDown(Actions.MOVE_RIGHT, true);
+        for (int i = 0; i < 40; i++) {
+            tick();
+        }
+
+        // Entity must be stopped by the upper wall at tx=3 (x=48)
+        // Collider right edge (body.x + 6) must not penetrate x=48
+        assertTrue(body.x + collider.getRight(0) <= 48,
+            "Solid wall taller than slope top must block horizontal movement");
+    }
+
+    @Test
+    void testAirborneEntityBlockedBySolidTileAtSlopeSeam() {
+        // Slope UP_RIGHT at (tx=2, ty=1), solid ground at (tx=3, ty=1)
+        grid.setTile(2, 1, TileShape.SLOPE_45_UP_RIGHT);
+        grid.setTile(3, 1, TileShape.SOLID);
+
+        // Airborne entity at y=24 flying right toward the solid tile at tx=3 (x=48..63, y: 16..31)
+        body.resetPosition(40, 24);
+        body.grounded = false;
+        body.vx = 2.0f; // in-flight horizontal speed
+
+        // Simulate tick without input down (flying forward)
+        tick();
+
+        // Must collide with solid tile at x=48 and be stopped as a wall
+        assertTrue(body.x + collider.getRight(0) <= 48,
+            "Airborne entity must collide with solid tile even if adjacent to slope");
+    }
+
+    @Test
+    void testSlopeSeamWorksForUpLeftSlope() {
+        // Floor at ty=0 from tx=0..4
+        for (int x = 0; x <= 4; x++) grid.setTile(x, 0, TileShape.SOLID);
+        // Solid flat ground at ty=1 from tx=0..1 (top=32)
+        grid.setTile(0, 1, TileShape.SOLID);
+        grid.setTile(1, 1, TileShape.SOLID);
+        // Slope UP_LEFT at (tx=2, ty=1)
+        grid.setTile(2, 1, TileShape.SLOPE_45_UP_LEFT);
+
+        // Start on elevated flat ground at x=20, y=32
+        body.resetPosition(20, 32);
+        body.grounded = true;
+
+        // Walk right down slope
+        inputState.setButtonDown(Actions.MOVE_RIGHT, true);
+        for (int i = 0; i < 40 && body.x < 55; i++) {
+            tick();
+            assertTrue(body.grounded, "Must stay grounded walking down UP_LEFT slope");
+        }
+        assertEquals(16, body.y, "Must descend to bottom floor at y=16");
+
+        // Now walk left back up slope onto flat ground at y=32
+        inputState.setButtonDown(Actions.MOVE_RIGHT, false);
+        inputState.setButtonDown(Actions.MOVE_LEFT, true);
+        for (int i = 0; i < 40 && body.x > 20; i++) {
+            tick();
+            assertTrue(body.grounded, "Must stay grounded walking up UP_LEFT slope");
+        }
+
+        assertEquals(32, body.y, "Entity must reach elevated flat ground at y=32 on UP_LEFT slope");
+        assertTrue(body.x <= 25, "Entity should advance onto flat ground at top of UP_LEFT slope");
+    }
+
+    @Test
+    void testMovementLevelMirrorSymmetryOnSlopes() {
+        // Room A: Slope UP_RIGHT at tx=2 (x: 32..47, y: 16..31)
+        TileGrid gridA = new TileGrid(10, 5, 16);
+        for (int x = 0; x < 10; x++) gridA.setTile(x, 0, TileShape.SOLID);
+        gridA.setTile(2, 1, TileShape.SLOPE_45_UP_RIGHT);
+        for (int x = 3; x < 10; x++) gridA.setTile(x, 1, TileShape.SOLID);
+
+        // Room B: Exact horizontal mirror (width = 160 px, 10 tiles)
+        // Mirrored tx=2 is 10 - 1 - 2 = 7. Slope UP_LEFT at tx=7 (x: 112..127)
+        TileGrid gridB = new TileGrid(10, 5, 16);
+        for (int x = 0; x < 10; x++) gridB.setTile(x, 0, TileShape.SOLID);
+        gridB.setTile(7, 1, TileShape.SLOPE_45_UP_LEFT);
+        for (int x = 0; x <= 6; x++) gridB.setTile(x, 1, TileShape.SOLID);
+
+        World worldA = new World();
+        World worldB = new World();
+
+        long idA = worldA.createEntity();
+        long idB = worldB.createEntity();
+
+        int startXA = 25;
+        int startXB = 160 - startXA; // 135
+        int startY = 16;
+
+        BodyComponent bodyA = new BodyComponent(startXA, startY);
+        BodyComponent bodyB = new BodyComponent(startXB, startY);
+
+        ColliderComponent colA = new ColliderComponent(12, 36);
+        ColliderComponent colB = new ColliderComponent(12, 36);
+
+        JumpStateComponent jumpA = new JumpStateComponent();
+        JumpStateComponent jumpB = new JumpStateComponent();
+
+        InputState inA = new InputState(actionRegistry);
+        InputState inB = new InputState(actionRegistry);
+
+        worldA.setBody(idA, bodyA);
+        worldA.setCollider(idA, colA);
+        worldA.setFacing(idA, new FacingComponent(1));
+        worldA.setController(idA, new ControllerComponent(ControlSource.PLAYER));
+        worldA.setJumpState(idA, jumpA);
+        worldA.setInputState(idA, new InputStateComponent(inA));
+        worldA.applyDeferredLifecycle();
+
+        worldB.setBody(idB, bodyB);
+        worldB.setCollider(idB, colB);
+        worldB.setFacing(idB, new FacingComponent(-1));
+        worldB.setController(idB, new ControllerComponent(ControlSource.PLAYER));
+        worldB.setJumpState(idB, jumpB);
+        worldB.setInputState(idB, new InputStateComponent(inB));
+        worldB.applyDeferredLifecycle();
+
+        // Walk up slopes: A moves right, B moves left
+        inA.setButtonDown(Actions.MOVE_RIGHT, true);
+        inB.setButtonDown(Actions.MOVE_LEFT, true);
+
+        for (int t = 0; t < 30; t++) {
+            inA.resolveAxes();
+            inB.resolveAxes();
+            movementSystem.update(worldA, gridA);
+            movementSystem.update(worldB, gridB);
+            worldA.getEventQueue().dispatch();
+            worldB.getEventQueue().dispatch();
+            inA.beginTick();
+            inB.beginTick();
+
+            assertEquals(160, bodyA.x + bodyB.x, "Tick " + t + ": Mirrored X coordinates must sum to room width 160");
+            assertEquals(bodyA.y, bodyB.y, "Tick " + t + ": Y coordinate must be identical on mirrored slopes");
+            assertEquals(bodyA.grounded, bodyB.grounded, "Tick " + t + ": Grounded state must match");
+        }
+    }
 }

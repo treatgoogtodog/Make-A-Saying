@@ -140,7 +140,13 @@ Format for entries:
 ### DEC-013: Slope Floor-Only Rule and Adjacent Solid Seam Resolution
 - **Date**: 2026-11-01
 - **Context**: Slopes must provide floor only and never block horizontal movement or act as ceilings. Furthermore, when a 12px collider walks up a slope toward a flat solid ground tile, the leading edge of the collider penetrates the solid tile column before the feet reach the top of the slope.
-- **Choice**: Solid tiles whose exposed face is flush with and covered by an adjacent slope (`SLOPE_45_UP_RIGHT` to the left or `SLOPE_45_UP_LEFT` to the right) are treated as walkable floor, not blocking walls, when approached by an entity grounded on or rising up the slope.
+- **Choice**: Solid tiles whose exposed face is flush with and covered by an adjacent slope are treated as walkable floor, not blocking walls, under the following strict conditions:
+  - **Axis**: Horizontal stepping checks only (X axis). Vertical collision uses standard `getFloorSurface` and normal floor/ceiling rules.
+  - **Entity State**: Grounded entities only (`body.grounded == true`). Airborne entities (`body.grounded == false`) are completely unaffected and collide with all `SOLID` tiles normally.
+  - **Which Tiles**:
+    - Rightward motion (`signX > 0`): Solid tile at `(tx, ty)` whose left neighbor `(tx - 1, ty)` is `SLOPE_45_UP_RIGHT`, provided `feetX < tx * tileSize` and `feetY <= (ty + 1) * tileSize`.
+    - Leftward motion (`signX < 0`): Solid tile at `(tx, ty)` whose right neighbor `(tx + 1, ty)` is `SLOPE_45_UP_LEFT`, provided `feetX >= (tx + 1) * tileSize` and `feetY <= (ty + 1) * tileSize`.
+    - Any solid tile at `ty + 1` or higher (a wall taller than the slope top) blocks horizontal movement normally.
 - **Alternatives Considered**: Shrinking the horizontal collider width on slopes (rejected: complicates collision shapes and causes inconsistency).
 - **Reversibility**: Medium.
 

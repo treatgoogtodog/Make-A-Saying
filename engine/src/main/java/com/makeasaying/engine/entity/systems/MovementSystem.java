@@ -57,7 +57,10 @@ public final class MovementSystem {
             long entityId = world.getIdByIndex(i);
 
             // 0. Stuck-body check: if starting tick overlapping solid, skip movement and log warning
-            if (isSolidOrPlatform(world, grid, collider, body.x, body.y)) {
+            boolean stuck = body.grounded
+                ? isSolidOrPlatformGroundedSlope(world, grid, collider, body.x, body.y)
+                : isSolidOrPlatform(world, grid, collider, body.x, body.y);
+            if (stuck) {
                 Log.warn(LogCategory.PHYSICS, "Entity %d stuck inside solid at (%d, %d)! Skipping movement.",
                     entityId, body.x, body.y);
                 continue;
@@ -180,7 +183,7 @@ public final class MovementSystem {
                     if (newFloor != Integer.MIN_VALUE) {
                         if (newFloor >= body.y) {
                             // Rising slope or stepping up onto flat floor
-                            if (!isSolidOrPlatform(world, grid, collider, nextX, newFloor)) {
+                            if (!isSolidOrPlatformGroundedSlope(world, grid, collider, nextX, newFloor)) {
                                 body.x = nextX;
                                 body.y = newFloor;
                                 continue;
@@ -189,9 +192,11 @@ public final class MovementSystem {
                             // Descending slope
                             int drop = body.y - newFloor;
                             if (drop <= tuning.slopeSnapPx()) {
-                                body.x = nextX;
-                                body.y = newFloor;
-                                continue;
+                                if (!isSolidOrPlatformGroundedSlope(world, grid, collider, nextX, newFloor)) {
+                                    body.x = nextX;
+                                    body.y = newFloor;
+                                    continue;
+                                }
                             } else {
                                 // Walked off into air: no launch (vy stays 0)
                                 if (!isSolidOrPlatform(world, grid, collider, nextX, body.y)) {
@@ -309,8 +314,35 @@ public final class MovementSystem {
 
     /**
      * Checks if collider at (feetX, feetY) overlaps a full SOLID tile in the grid.
+     * Pure geometric check without exceptions; used for airborne movement, general overlap, and squish.
      */
     public static boolean collidesAt(TileGrid grid, ColliderComponent collider, int feetX, int feetY) {
+        int left = collider.getLeft(feetX);
+        int right = collider.getRight(feetX);
+        int bottom = collider.getBottom(feetY);
+        int top = collider.getTop(feetY);
+
+        int tileSize = grid.getTileSize();
+        int tileLeft = Math.floorDiv(left, tileSize);
+        int tileRight = Math.floorDiv(right - 1, tileSize);
+        int tileBottom = Math.floorDiv(bottom, tileSize);
+        int tileTop = Math.floorDiv(top - 1, tileSize);
+
+        for (int ty = tileBottom; ty <= tileTop; ty++) {
+            for (int tx = tileLeft; tx <= tileRight; tx++) {
+                if (grid.isSolid(tx, ty)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Checks if collider at (feetX, feetY) overlaps a SOLID tile during grounded slope walking.
+     * Exempts solid ground tiles flush with an adjacent slope top per DEC-013.
+     */
+    public static boolean collidesAtGroundedSlope(TileGrid grid, ColliderComponent collider, int feetX, int feetY) {
         int left = collider.getLeft(feetX);
         int right = collider.getRight(feetX);
         int bottom = collider.getBottom(feetY);
@@ -364,7 +396,20 @@ public final class MovementSystem {
         if (collidesAt(grid, collider, feetX, feetY)) {
             return true;
         }
+        return overlapsPlatform(world, collider, feetX, feetY);
+    }
 
+    /**
+     * Checks if collider at (feetX, feetY) overlaps a SOLID tile (with slope-seam floor exemption) or any moving platform.
+     */
+    public static boolean isSolidOrPlatformGroundedSlope(World world, TileGrid grid, ColliderComponent collider, int feetX, int feetY) {
+        if (collidesAtGroundedSlope(grid, collider, feetX, feetY)) {
+            return true;
+        }
+        return overlapsPlatform(world, collider, feetX, feetY);
+    }
+
+    private static boolean overlapsPlatform(World world, ColliderComponent collider, int feetX, int feetY) {
         if (world != null) {
             int left = collider.getLeft(feetX);
             int right = collider.getRight(feetX);
