@@ -1,0 +1,9 @@
+rootProject.name = 'make-a-saying'
+
+include 'engine'
+include 'data'
+include 'game'
+include 'editor-core'
+include 'editor-map'
+include 'editor-anim'
+include 'editor-cut'

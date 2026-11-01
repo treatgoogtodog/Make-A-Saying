@@ -1,0 +1,6 @@
+dependencies {
+    api project(':engine')
+    api project(':data')
+    api "io.github.spair:imgui-java-binding:${imguiVersion}"
+    api "io.github.spair:imgui-java-lwjgl3:${imguiVersion}"
+}

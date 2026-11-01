@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "virtualWidth": 320,
+  "virtualHeight": 180,
+  "tileSize": 16,
+  "windowWidth": 1280,
+  "windowHeight": 720,
+  "windowTitle": "Make-A-Saying",
+  "vsync": true,
+  "targetFps": 60,
+  "cmPerPixel": 4.5,
+  "headUnitPx": 6,
+  "bodyCollider": {
+    "width": 12,
+    "standingHeight": 36,
+    "crouchedHeight": 22
+  }
+}

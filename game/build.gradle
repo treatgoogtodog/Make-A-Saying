@@ -1,0 +1,27 @@
+plugins {
+    id 'application'
+}
+
+application {
+    mainClass = 'com.makeasaying.game.GameLauncher'
+}
+
+run {
+    workingDir = rootProject.projectDir
+}
+
+dependencies {
+    implementation project(':engine')
+    implementation project(':data')
+    implementation project(':editor-core')
+    implementation project(':editor-map')
+    implementation project(':editor-anim')
+    implementation project(':editor-cut')
+
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:${gdxVersion}"
+    implementation "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-desktop"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-desktop:${controllersVersion}"
+    implementation "io.github.spair:imgui-java-natives-windows:${imguiVersion}"
+    implementation "io.github.spair:imgui-java-natives-linux:${imguiVersion}"
+    implementation "io.github.spair:imgui-java-natives-macos:${imguiVersion}"
+}
