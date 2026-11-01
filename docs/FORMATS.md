@@ -27,3 +27,5 @@ This document defines all file formats used in the project, their schemas, units
   - `borderColor` (string, optional): Hex color for integer scaling letterbox borders (default `"#000000"`).
   - `vsync` (bool, optional): Enable VSync (default `true`).
   - `targetFps` (int, optional): Target frame rate (default `60`).
+  - `tickRate` (int, optional): Fixed-timestep simulation tick rate in ticks/second (default `60`).
+  - `workerThreads` (int, optional): Background worker pool size, clamped between 2 and 4 (default `2`).

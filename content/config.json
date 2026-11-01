@@ -9,6 +9,8 @@
   "borderColor": "#000000",
   "vsync": true,
   "targetFps": 60,
+  "tickRate": 60,
+  "workerThreads": 2,
   "cmPerPixel": 4.5,
   "headUnitPx": 6,
   "bodyCollider": {

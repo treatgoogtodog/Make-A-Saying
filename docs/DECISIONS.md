@@ -31,3 +31,15 @@ Format for entries:
   - `engine -> data` is strictly forbidden and enforced by Gradle and architecture tests.
 - **Alternatives Considered**: `engine` depending on `data` (rejected: would force `engine` to take serialization dependencies or create duplicate DTOs).
 - **Reversibility**: Hard (foundational architectural boundary).
+
+---
+
+### DEC-003: FixedTimestep Precision and Checker Resolution
+- **Date**: 2026-11-01
+- **Context**: Precision drift prevention in accumulator over extended gameplay; placeholder texture readability without scaling; headless testability.
+- **Choice**:
+  - `FixedTimestep` uses `double` precision internally for accumulator and tick step; incoming frame deltas clamped to 0.1s; capped at 5 ticks/frame with excess dropped and rate-limited warning.
+  - `CheckerGenerator` produces 16x16 RGBA8888 checker data with 8px squares in pure Java (tested without LWJGL natives).
+  - `VirtualScreenMath` separates viewport scaling calculation from GL context.
+- **Alternatives Considered**: 2x2 texture (rejected: too small at 1x without runtime scaling), single-precision float accumulator (rejected: precision loss across high-frequency frames).
+- **Reversibility**: Easy.

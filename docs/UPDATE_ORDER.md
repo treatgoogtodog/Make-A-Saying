@@ -2,6 +2,18 @@
 
 Per Section 7.2 and 7.3 of `AGENTS.md`, systems in the engine run in a fixed, documented, deterministic sequence. Systems hold no private state; all tick advances and state transitions happen strictly within this order.
 
+## Main Thread Frame Pipeline (Per Render Frame)
+1. **Drain Jobs**: Worker pool results and error callbacks dispatched to main thread queue are drained before simulation advances.
+2. **Accumulator Advance (`FixedTimestep`)**:
+   - Wall-clock frame delta clamped to `MAX_DELTA = 0.1s`.
+   - Accumulates delta; determines tick count `N` (capped at 5 ticks/frame, excess dropped with warning).
+   - Computes interpolation factor `alpha` in `[0.0, 1.0)`.
+3. **Simulation Ticks**: Executes `N` ticks of the tick pipeline below.
+4. **Render Virtual Screen**:
+   - 320x180 FrameBuffer bound; scene rendered with sub-tick position interpolation and whole-pixel snapping (`Snap.lerpAndSnap`).
+   - FrameBuffer unbound; centered integer scaling applied to window backbuffer with letterbox/pillarbox `borderColor`.
+5. **FrameTimer**: Non-allocating update and render ms timing recorded; window title stats updated once per second.
+
 ## Simulation Tick Pipeline (Fixed Timestep 1/60s)
 1. **Cutscene Runner**: Advances active cutscene blocks and hops.
 2. **Input Collection**: Drains raw events from render thread queue into active context, updates per-entity `InputState`.

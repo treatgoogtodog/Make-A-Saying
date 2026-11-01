@@ -1,7 +1,7 @@
 package com.makeasaying.engine.config;
 
 /**
- * Global engine configuration model matching AGENTS.md section 6 constants.
+ * Global engine configuration model matching AGENTS.md section 6 constants and M1 brief.
  * Populated from content/config.json via the data module loader.
  */
 public record EngineConfig(
@@ -15,27 +15,45 @@ public record EngineConfig(
     String borderColor,
     boolean vsync,
     int targetFps,
+    int tickRate,
+    int workerThreads,
     float cmPerPixel,
     int headUnitPx,
     BodyColliderConfig bodyCollider
 ) {
     public static final int CURRENT_VERSION = 1;
     public static final String DEFAULT_BORDER_COLOR = "#000000";
+    public static final int DEFAULT_TICK_RATE = 60;
+    public static final int DEFAULT_WORKER_THREADS = 2;
 
     public EngineConfig {
         if (borderColor == null || borderColor.isBlank()) {
             borderColor = DEFAULT_BORDER_COLOR;
         }
+        if (tickRate <= 0) {
+            tickRate = DEFAULT_TICK_RATE;
+        }
+        workerThreads = Math.clamp(workerThreads <= 0 ? DEFAULT_WORKER_THREADS : workerThreads, 2, 4);
     }
 
-    public record BodyColliderConfig(
-        int width,
-        int standingHeight,
-        int crouchedHeight
+    public EngineConfig(
+        int version,
+        int virtualWidth,
+        int virtualHeight,
+        int tileSize,
+        int windowWidth,
+        int windowHeight,
+        String windowTitle,
+        String borderColor,
+        boolean vsync,
+        int targetFps,
+        float cmPerPixel,
+        int headUnitPx,
+        BodyColliderConfig bodyCollider
     ) {
-        public static BodyColliderConfig defaultConfig() {
-            return new BodyColliderConfig(12, 36, 22);
-        }
+        this(version, virtualWidth, virtualHeight, tileSize, windowWidth, windowHeight,
+            windowTitle, borderColor, vsync, targetFps, DEFAULT_TICK_RATE, DEFAULT_WORKER_THREADS,
+            cmPerPixel, headUnitPx, bodyCollider);
     }
 
     public EngineConfig(
@@ -53,7 +71,18 @@ public record EngineConfig(
         BodyColliderConfig bodyCollider
     ) {
         this(version, virtualWidth, virtualHeight, tileSize, windowWidth, windowHeight,
-            windowTitle, DEFAULT_BORDER_COLOR, vsync, targetFps, cmPerPixel, headUnitPx, bodyCollider);
+            windowTitle, DEFAULT_BORDER_COLOR, vsync, targetFps, DEFAULT_TICK_RATE, DEFAULT_WORKER_THREADS,
+            cmPerPixel, headUnitPx, bodyCollider);
+    }
+
+    public record BodyColliderConfig(
+        int width,
+        int standingHeight,
+        int crouchedHeight
+    ) {
+        public static BodyColliderConfig defaultConfig() {
+            return new BodyColliderConfig(12, 36, 22);
+        }
     }
 
     public static EngineConfig defaultConfig() {
@@ -68,6 +97,8 @@ public record EngineConfig(
             DEFAULT_BORDER_COLOR,
             true,
             60,
+            DEFAULT_TICK_RATE,
+            DEFAULT_WORKER_THREADS,
             4.5f,
             6,
             BodyColliderConfig.defaultConfig()

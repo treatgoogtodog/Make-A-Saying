@@ -24,6 +24,8 @@ public final class GameLauncher {
         Lwjgl3ApplicationConfiguration appConfig = new Lwjgl3ApplicationConfiguration();
         appConfig.setTitle(config.windowTitle());
         appConfig.setWindowedMode(config.windowWidth(), config.windowHeight());
+        appConfig.setWindowSizeLimits(320, 180, -1, -1);
+        appConfig.setResizable(true);
         appConfig.useVsync(config.vsync());
         appConfig.setForegroundFPS(config.targetFps());
 

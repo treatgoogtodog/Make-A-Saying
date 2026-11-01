@@ -5,7 +5,7 @@ Tracking milestone status against Section 10 of `AGENTS.md`.
 | Milestone | Title | Status | Notes |
 |---|---|---|---|
 | M0 | Foundation | Complete | Multi-module build, config reader, category logging, empty window launcher, tests pass |
-| M1 | Loop and rendering | Planned | Accumulator, 320x180 FBO, integer scaling, pixel snapping, Jobs pool |
+| M1 | Loop and rendering | Complete | FixedTimestep, 320x180 FBO integer scale, pixel snap/lerp, Jobs pool, zero-alloc loop, demo scene |
 | M2 | Input layer | Planned | Actions, bindings, InputState, context stack, recording/replay |
 | M3 | Entities and movement core | Planned | Generational IDs, components, update order, tile collision |
 | M4 | Slopes and platforms | Planned | 5 tile shapes, slope height sample, one-way, moving platforms |

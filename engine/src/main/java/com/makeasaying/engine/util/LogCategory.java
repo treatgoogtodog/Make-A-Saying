@@ -17,5 +17,6 @@ public enum LogCategory {
     INVENTORY,
     LUA,
     DATA,
+    ASSETS,
     EDITOR
 }
