@@ -6,8 +6,11 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.makeasaying.data.input.ActionLoader;
 import com.makeasaying.data.input.BindingsLoader;
+import com.makeasaying.data.tuning.MovementTuningLoader;
+import com.makeasaying.data.tuning.MovementTuningWatcher;
 import com.makeasaying.engine.async.Jobs;
 import com.makeasaying.engine.config.EngineConfig;
+import com.makeasaying.engine.entity.MovementTuning;
 import com.makeasaying.engine.input.ActionRegistry;
 import com.makeasaying.engine.input.Actions;
 import com.makeasaying.engine.input.ContextBindings;
@@ -21,13 +24,13 @@ import com.makeasaying.engine.loop.FrameTimer;
 import com.makeasaying.engine.render.VirtualScreen;
 import com.makeasaying.engine.util.Log;
 import com.makeasaying.engine.util.LogCategory;
-import com.makeasaying.game.demo.DemoScene;
+import com.makeasaying.game.demo.DemoSceneM3;
 
 import java.nio.file.Path;
 
 /**
  * Main game entry point managing the fixed-timestep loop, input layer,
- * background Jobs, and VirtualScreen integer-scaled rendering.
+ * background Jobs, hot-reloading tuning, and VirtualScreen integer-scaled rendering.
  */
 public class PlatformerGame implements ApplicationListener {
     private final EngineConfig config;
@@ -42,12 +45,15 @@ public class PlatformerGame implements ApplicationListener {
     private ContextBindings contextBindings;
     private InputManager inputManager;
 
+    private MovementTuning movementTuning;
+    private MovementTuningWatcher tuningWatcher;
+
     private InputRecorder recorder;
     private InputReplayer replayer;
     private ReplayData lastRecordedReplay;
 
-    // Temporary demo scene - single deletion point for M3
-    private DemoScene demoScene;
+    // Temporary demo scene - single deletion point for M5
+    private DemoSceneM3 demoScene;
 
     public PlatformerGame(EngineConfig config) {
         this.config = config != null ? config : EngineConfig.defaultConfig();
@@ -68,20 +74,36 @@ public class PlatformerGame implements ApplicationListener {
         this.sceneBatch = new SpriteBatch();
         this.sceneBatch.getProjectionMatrix().setToOrtho2D(0, 0, config.virtualWidth(), config.virtualHeight());
 
-        // Load input actions and bindings from data files
+        // Load input actions and bindings
         try {
             this.actionRegistry = ActionLoader.load(Path.of("content/actions.json"));
             this.contextBindings = BindingsLoader.load(Path.of("content/bindings.json"), actionRegistry);
         } catch (Exception e) {
-            Log.error(LogCategory.DATA, "Failed to load actions or bindings, using defaults", e);
+            Log.error(LogCategory.DATA, "Failed to load actions or bindings: %s", e, e.getMessage());
             throw new RuntimeException("Input setup failed: " + e.getMessage(), e);
         }
 
         this.inputManager = new InputManager(actionRegistry, contextBindings);
         Gdx.input.setInputProcessor(inputManager);
 
-        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m2_hash");
-        this.demoScene = new DemoScene();
+        // Load movement tuning with hot-reloading watcher
+        Path tuningPath = Path.of("content/tuning/movement.json");
+        try {
+            this.movementTuning = MovementTuningLoader.load(tuningPath, config.tickRate());
+        } catch (Exception e) {
+            Log.error(LogCategory.DATA, "Failed loading movement tuning from %s. Using defaults.", e, tuningPath);
+            this.movementTuning = MovementTuning.defaultTuning(config.tickRate());
+        }
+
+        this.tuningWatcher = new MovementTuningWatcher(tuningPath, config.tickRate(), jobs, reloaded -> {
+            this.movementTuning = reloaded;
+            if (demoScene != null) {
+                demoScene.getMovementSystem().setTuning(reloaded);
+            }
+        });
+
+        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m3_hash");
+        this.demoScene = new DemoSceneM3(movementTuning);
     }
 
     @Override
@@ -110,7 +132,7 @@ public class PlatformerGame implements ApplicationListener {
             boolean isFirstTickOfFrame = (i == 0);
             long currentTick = timestep.getCurrentTick();
 
-            // Tick input manager (events drained only on first tick of frame)
+            // Tick input manager
             inputManager.tick(currentTick, isFirstTickOfFrame);
 
             // Handle global debug record/playback commands
@@ -137,7 +159,7 @@ public class PlatformerGame implements ApplicationListener {
                 }
             }
 
-            // Determine active input state (live input or replayed input)
+            // Determine active input state
             InputState activeState;
             if (replayer != null && replayer.isPlaying()) {
                 replayer.tick(currentTick);
@@ -171,8 +193,11 @@ public class PlatformerGame implements ApplicationListener {
         float renderMs = (renderEnd - renderStart) / 1_000_000f;
         frameTimer.recordFrame(updateMs, renderMs);
 
-        // 5. Update window title once per second
+        // 5. Update window title and poll hot reloader once per second
         if (frameTimer.shouldUpdateTitle(frameStart)) {
+            if (tuningWatcher != null) {
+                tuningWatcher.poll();
+            }
             String recordStatus = recorder.isRecording() ? " [REC]" : (replayer != null && replayer.isPlaying() ? " [PLAY]" : "");
             Gdx.graphics.setTitle(String.format("%s%s [Upd: %.2fms | Rnd: %.2fms | FPS: %d]",
                 config.windowTitle(),
@@ -218,5 +243,9 @@ public class PlatformerGame implements ApplicationListener {
 
     public ContextBindings getContextBindings() {
         return contextBindings;
+    }
+
+    public MovementTuning getMovementTuning() {
+        return movementTuning;
     }
 }

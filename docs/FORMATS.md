@@ -68,3 +68,26 @@ This document defines all file formats used in the project, their schemas, units
     - `tick` (long, required): Simulation tick index.
     - `context` (string, optional): Context change if triggered on this tick.
     - `down` (list of strings, required): List of all action IDs currently held down on this tick.
+
+---
+
+## Movement Tuning Format (`content/tuning/movement.json`)
+- **Location**: `content/tuning/movement.json`
+- **Current Version**: `1`
+- **Fields** (Human units converted to per-tick at load):
+  - `version` (int, required): File format version.
+  - `groundAccel` (float, px/s²): Ground acceleration rate.
+  - `groundFriction` (float, px/s²): Ground deceleration rate when no input is held.
+  - `groundTurnaroundAccel` (float, px/s²): Ground deceleration when reversing direction.
+  - `airAccel` (float, px/s²): Air acceleration rate.
+  - `airFriction` (float, px/s²): Air deceleration rate.
+  - `airTurnaroundAccel` (float, px/s²): Air turnaround deceleration rate.
+  - `maxRunSpeed` (float, px/s): Maximum horizontal running speed.
+  - `jumpSpeed` (float, px/s): Initial upward jump velocity.
+  - `jumpCutMultiplier` (float, ratio [0.0, 1.0]): Upward velocity multiplier on early jump release.
+  - `riseGravity` (float, px/s²): Downward acceleration while rising.
+  - `fallGravity` (float, px/s²): Downward acceleration while falling.
+  - `maxFallSpeed` (float, px/s): Maximum downward velocity clamp.
+  - `coyoteTicks` (int, ticks): Number of ticks after leaving a ledge where jump is permitted.
+  - `jumpBufferTicks` (int, ticks): Number of ticks an early jump press is remembered.
+  - `cornerCorrectionPx` (int, pixels): Maximum ceiling corner overhang pushed around tile edges.

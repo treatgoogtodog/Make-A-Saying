@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "groundAccel": 900.0,
+  "groundFriction": 1200.0,
+  "groundTurnaroundAccel": 1800.0,
+  "airAccel": 600.0,
+  "airFriction": 300.0,
+  "airTurnaroundAccel": 1200.0,
+  "maxRunSpeed": 120.0,
+  "jumpSpeed": 240.0,
+  "jumpCutMultiplier": 0.5,
+  "riseGravity": 900.0,
+  "fallGravity": 1200.0,
+  "maxFallSpeed": 360.0,
+  "coyoteTicks": 6,
+  "jumpBufferTicks": 6,
+  "cornerCorrectionPx": 4
+}
