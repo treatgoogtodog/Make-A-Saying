@@ -8,7 +8,7 @@ Tracking milestone status against Section 10 of `AGENTS.md`.
 | M1 | Loop and rendering | Complete | FixedTimestep, 320x180 FBO integer scale, pixel snap/lerp, Jobs pool, zero-alloc loop, demo scene |
 | M2 | Input layer | Complete | Actions, bindings per context, raw event queue, per-tick drain, replay recording/playback, zero-alloc |
 | M3 | Entities and movement core | Complete | Generational IDs, components, update order, tile collision, coyote/buffer, hot reload, zero-alloc |
-| M4 | Slopes and platforms | Planned | 5 tile shapes, slope height sample, one-way, moving platforms |
+| M4 | Slopes and platforms | Complete | 5 tile shapes, pure floorHeightAt, 2-column sampling, slope snapping, one-way drop-through, moving platforms (BLOCK/CRUSH), zero-alloc |
 | M5 | Data module and rooms | Planned | Formats, loaders, room persistence, exits/transitions |
 | M6 | Editor shell and basic map editor | Planned | ImGui docking, undo/redo, Play/Stop snapshots, tile tools |
 | M7 | Flags, conditions, saves | Planned | flags.json registry, condition evaluator, atomic save/load |

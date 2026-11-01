@@ -1,11 +1,9 @@
 package com.makeasaying.engine.entity;
 
-import com.makeasaying.engine.util.Log;
-import com.makeasaying.engine.util.LogCategory;
-
 /**
- * Tile collision grid per AGENTS.md section 7.5 and DEC-007 / DEC-008.
+ * Tile collision grid per AGENTS.md section 7.5 and DEC-007 / DEC-008 / DEC-011.
  * Arbitrary dimensions, Y-up coordinates, byte array storage.
+ * Supports all 5 tile shapes: EMPTY, SOLID, ONE_WAY, SLOPE_45_UP_RIGHT, SLOPE_45_UP_LEFT.
  */
 public final class TileGrid {
     private final int width;
@@ -49,21 +47,78 @@ public final class TileGrid {
         return tiles[tileY * width + tileX];
     }
 
+    public TileShape getShape(int tileX, int tileY) {
+        return TileShape.fromId(getTileId(tileX, tileY));
+    }
+
     /**
-     * Checks if a tile is solid. In M3, only EMPTY and SOLID are supported;
-     * any other shape throws a loud error.
+     * Checks if a tile is a full solid block.
+     * In M4, only TileShape.SOLID returns true; slopes and one-way platforms
+     * provide floor only and do not block horizontal movement or act as ceilings.
      */
     public boolean isSolid(int tileX, int tileY) {
-        byte shapeId = getTileId(tileX, tileY);
-        if (shapeId == TileShape.SOLID.id) {
-            return true;
-        } else if (shapeId == TileShape.EMPTY.id) {
-            return false;
-        } else {
-            Log.error(LogCategory.PHYSICS, "Unsupported tile shape %d encountered at (%d, %d) in M3",
-                shapeId, tileX, tileY);
-            throw new IllegalStateException("Unsupported tile shape in M3: " + shapeId + " at (" + tileX + "," + tileY + ")");
+        return getTileId(tileX, tileY) == TileShape.SOLID.id;
+    }
+
+    public boolean isOneWay(int tileX, int tileY) {
+        return getTileId(tileX, tileY) == TileShape.ONE_WAY.id;
+    }
+
+    public boolean isSlope(int tileX, int tileY) {
+        byte shape = getTileId(tileX, tileY);
+        return shape == TileShape.SLOPE_45_UP_RIGHT.id || shape == TileShape.SLOPE_45_UP_LEFT.id;
+    }
+
+    /**
+     * Pure function returning floor height in pixels above the tile bottom for column c in 0..15.
+     * Per Architect specification:
+     * - SLOPE_45_UP_RIGHT: c + 1
+     * - SLOPE_45_UP_LEFT: 16 - c
+     * - SOLID: 16
+     * - ONE_WAY: 16
+     * - EMPTY: 0
+     */
+    public static int floorHeightAt(TileShape shape, int localX) {
+        if (localX < 0 || localX >= 16) {
+            throw new IllegalArgumentException("localX must be in 0..15, was " + localX);
         }
+        return switch (shape) {
+            case SLOPE_45_UP_RIGHT -> localX + 1;
+            case SLOPE_45_UP_LEFT -> 16 - localX;
+            case SOLID, ONE_WAY -> 16;
+            case EMPTY -> 0;
+        };
+    }
+
+    /**
+     * Finds the highest floor surface Y at the specified column within the given vertical search window.
+     * Returns Integer.MIN_VALUE if no floor exists in the window.
+     */
+    public int getFloorSurfaceAtCol(int colX, int feetY, int searchDownPx, int searchUpPx, boolean ignoreOneWay) {
+        int tx = Math.floorDiv(colX, tileSize);
+        int lx = Math.floorMod(colX, tileSize);
+        int topRow = Math.floorDiv(feetY + searchUpPx, tileSize);
+        int bottomRow = Math.floorDiv(feetY - searchDownPx, tileSize);
+
+        for (int ty = topRow; ty >= bottomRow; ty--) {
+            TileShape shape = getShape(tx, ty);
+            int surfaceY = Integer.MIN_VALUE;
+
+            if (shape == TileShape.SOLID) {
+                surfaceY = (ty + 1) * tileSize;
+            } else if (shape == TileShape.ONE_WAY) {
+                if (!ignoreOneWay) {
+                    surfaceY = (ty + 1) * tileSize;
+                }
+            } else if (shape == TileShape.SLOPE_45_UP_RIGHT || shape == TileShape.SLOPE_45_UP_LEFT) {
+                surfaceY = ty * tileSize + floorHeightAt(shape, lx);
+            }
+
+            if (surfaceY != Integer.MIN_VALUE && surfaceY <= feetY + searchUpPx && surfaceY >= feetY - searchDownPx) {
+                return surfaceY;
+            }
+        }
+        return Integer.MIN_VALUE;
     }
 
     public void clear() {

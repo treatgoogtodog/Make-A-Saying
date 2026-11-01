@@ -14,5 +14,7 @@
   "maxFallSpeed": 360.0,
   "coyoteTicks": 6,
   "jumpBufferTicks": 6,
-  "cornerCorrectionPx": 4
+  "cornerCorrectionPx": 4,
+  "slopeSnapPx": 4,
+  "dropThroughTicks": 8
 }

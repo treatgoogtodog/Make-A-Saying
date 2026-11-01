@@ -111,3 +111,55 @@ Format for entries:
 - **Choice**: `content/tuning/movement.json` specifies velocities in pixels/second, accelerations in pixels/second², and timers/buffers in ticks. `MovementTuningLoader` converts these once at load time into per-tick values (`px/tick` and `px/tick²`). Simulation systems read strictly per-tick values.
 - **Alternatives Considered**: Authoring per-tick values directly in JSON (rejected: counter-intuitive for humans to author 0.042 px/tick²).
 - **Reversibility**: Easy.
+
+---
+
+### DEC-011: Slope Floor Height Pure Function Formula
+- **Date**: 2026-11-01
+- **Context**: Determining the exact floor height in pixels above the tile bottom for tile column c in [0, 15] for 16x16 tiles.
+- **Choice**: Pure function `TileGrid.floorHeightAt(shape, localX)` implementing:
+  - `SLOPE_45_UP_RIGHT`: `c + 1` (column 0 is 1px, column 15 is 16px).
+  - `SLOPE_45_UP_LEFT`: `16 - c` (column 0 is 16px, column 15 is 1px).
+  - `SOLID` & `ONE_WAY`: `16` (full tile height).
+  - `EMPTY`: `0`.
+  Provides a continuous staircase across tile seams (+1 px per pixel) without gaps against filled flat ground.
+- **Alternatives Considered**: 0-indexed formula `c` (rejected: leaves a 1-pixel gap against solid tiles and 0 height at bottom column).
+- **Reversibility**: Hard.
+
+---
+
+### DEC-012: Two-Column Slope Surface Sampling
+- **Date**: 2026-11-01
+- **Context**: A 12px collider with bottom-center origin at offset `[-6, +6)` has an even width, meaning there is no single center pixel column.
+- **Choice**: Sample the two central columns `feetX - 1` and `feetX`, taking `Math.max(surf1, surf2)`. This guarantees exact mirror symmetry between `SLOPE_45_UP_RIGHT` and `SLOPE_45_UP_LEFT`.
+- **Alternatives Considered**: Single column sampling at `feetX` (rejected: breaks left/right mirror symmetry because offset is asymmetrical).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-013: Slope Floor-Only Rule and Adjacent Solid Seam Resolution
+- **Date**: 2026-11-01
+- **Context**: Slopes must provide floor only and never block horizontal movement or act as ceilings. Furthermore, when a 12px collider walks up a slope toward a flat solid ground tile, the leading edge of the collider penetrates the solid tile column before the feet reach the top of the slope.
+- **Choice**: Solid tiles whose exposed face is flush with and covered by an adjacent slope (`SLOPE_45_UP_RIGHT` to the left or `SLOPE_45_UP_LEFT` to the right) are treated as walkable floor, not blocking walls, when approached by an entity grounded on or rising up the slope.
+- **Alternatives Considered**: Shrinking the horizontal collider width on slopes (rejected: complicates collision shapes and causes inconsistency).
+- **Reversibility**: Medium.
+
+---
+
+### DEC-014: Platform Squish Rule (BLOCK vs CRUSH)
+- **Date**: 2026-11-01
+- **Context**: Moving platforms pushing entities into static walls or ceilings.
+- **Choice**:
+  - `BLOCK`: Platform tests if moving entity would push it into a solid tile. If so, platform halts and resets remainder to 0 to prevent catapulting/tunneling.
+  - `CRUSH`: Platform pushes through, detects overlap with solid tile, and emits `CRUSHED` event to the event queue.
+- **Alternatives Considered**: Reverse platform direction on block (rejected: pauses/halts are standard and overridable in data).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-015: No Velocity Inheritance from Platforms
+- **Date**: 2026-11-01
+- **Context**: Entity jumping off or walking off a moving platform.
+- **Choice**: Per AGENTS.md principle 4.3 (determinism) and section 7.5, leaving a moving platform does NOT impart platform momentum/velocity onto the entity. Entity velocity is governed entirely by standard `InputState` and physics tuning.
+- **Alternatives Considered**: Adding platform velocity to jumping entity (rejected: violates explicit specification and introduces momentum drift).
+- **Reversibility**: Easy.

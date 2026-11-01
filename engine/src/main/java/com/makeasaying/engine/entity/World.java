@@ -25,6 +25,7 @@ public final class World {
     private final ControllerComponent[] controllers = new ControllerComponent[MAX_ENTITIES];
     private final InputStateComponent[] inputStates = new InputStateComponent[MAX_ENTITIES];
     private final JumpStateComponent[] jumpStates = new JumpStateComponent[MAX_ENTITIES];
+    private final com.makeasaying.engine.entity.components.PlatformComponent[] platforms = new com.makeasaying.engine.entity.components.PlatformComponent[MAX_ENTITIES];
 
     private final EntityEventQueue eventQueue;
     private final int[] freeIndices = new int[MAX_ENTITIES];
@@ -60,6 +61,7 @@ public final class World {
             controllers[i] = null;
             inputStates[i] = null;
             jumpStates[i] = null;
+            platforms[i] = null;
         }
 
         // Push free indices in reverse order so lowest index (1) is popped first
@@ -112,6 +114,7 @@ public final class World {
                 controllers[index] = null;
                 inputStates[index] = null;
                 jumpStates[index] = null;
+                platforms[index] = null;
                 freeIndices[freeCount++] = index;
             }
         }
@@ -168,6 +171,14 @@ public final class World {
         return isAlive(id) ? jumpStates[EntityId.getIndex(id)] : null;
     }
 
+    public void setPlatform(long id, com.makeasaying.engine.entity.components.PlatformComponent platform) {
+        if (isAlive(id)) platforms[EntityId.getIndex(id)] = platform;
+    }
+
+    public com.makeasaying.engine.entity.components.PlatformComponent getPlatform(long id) {
+        return isAlive(id) ? platforms[EntityId.getIndex(id)] : null;
+    }
+
     // Fast indexed access for systems (iteration by index 1..MAX_ENTITIES)
 
     public boolean isAliveIndex(int index) {
@@ -202,6 +213,10 @@ public final class World {
         return jumpStates[index];
     }
 
+    public com.makeasaying.engine.entity.components.PlatformComponent getPlatformByIndex(int index) {
+        return platforms[index];
+    }
+
     public EntityEventQueue getEventQueue() {
         return eventQueue;
     }
@@ -234,6 +249,8 @@ public final class World {
                 h *= 1099511628211L;
                 h ^= (b.grounded ? 1 : 0);
                 h *= 1099511628211L;
+                h ^= b.supportId;
+                h *= 1099511628211L;
             }
 
             FacingComponent f = facings[i];
@@ -247,6 +264,24 @@ public final class World {
                 h ^= js.coyoteTimer;
                 h *= 1099511628211L;
                 h ^= js.jumpBufferTimer;
+                h *= 1099511628211L;
+                h ^= js.dropThroughTimer;
+                h *= 1099511628211L;
+            }
+
+            com.makeasaying.engine.entity.components.PlatformComponent p = platforms[i];
+            if (p != null) {
+                h ^= p.currentX;
+                h *= 1099511628211L;
+                h ^= p.currentY;
+                h *= 1099511628211L;
+                h ^= p.direction;
+                h *= 1099511628211L;
+                h ^= p.pauseTimer;
+                h *= 1099511628211L;
+                h ^= Float.floatToIntBits(p.remainderX);
+                h *= 1099511628211L;
+                h ^= Float.floatToIntBits(p.remainderY);
                 h *= 1099511628211L;
             }
         }

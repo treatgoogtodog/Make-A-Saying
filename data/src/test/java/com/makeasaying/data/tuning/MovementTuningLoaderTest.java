@@ -30,6 +30,8 @@ class MovementTuningLoaderTest {
         assertEquals(6, tuning.coyoteTicks());
         assertEquals(6, tuning.jumpBufferTicks());
         assertEquals(4, tuning.cornerCorrectionPx());
+        assertEquals(4, tuning.slopeSnapPx());
+        assertEquals(8, tuning.dropThroughTicks());
 
         // Verify precomputed per-tick values
         assertEquals(2.0f, tuning.maxRunSpeedPerTick(), 0.001f);
@@ -84,6 +86,30 @@ class MovementTuningLoaderTest {
         """;
         assertThrows(IllegalStateException.class, () ->
             MovementTuningLoader.parse(MAPPER.readTree(badJumpCut), 60, "bad-jumpcut-test")
+        );
+        String badSlopeSnap = """
+        {
+          "version": 1,
+          "groundAccel": 900.0,
+          "groundFriction": 1200.0,
+          "groundTurnaroundAccel": 1800.0,
+          "airAccel": 600.0,
+          "airFriction": 300.0,
+          "airTurnaroundAccel": 1200.0,
+          "maxRunSpeed": 120.0,
+          "jumpSpeed": 240.0,
+          "jumpCutMultiplier": 0.5,
+          "riseGravity": 900.0,
+          "fallGravity": 1200.0,
+          "maxFallSpeed": 360.0,
+          "coyoteTicks": 6,
+          "jumpBufferTicks": 6,
+          "cornerCorrectionPx": 4,
+          "slopeSnapPx": 2
+        }
+        """;
+        assertThrows(IllegalArgumentException.class, () ->
+            MovementTuningLoader.parse(MAPPER.readTree(badSlopeSnap), 60, "bad-slopesnap-test")
         );
     }
 }

@@ -6,12 +6,14 @@ package com.makeasaying.engine.entity.components;
 public final class JumpStateComponent {
     public int coyoteTimer = 0;
     public int jumpBufferTimer = 0;
+    public int dropThroughTimer = 0; // Number of ticks to ignore ONE_WAY platforms
     public boolean hasJumpCut = false;
     public boolean hasAirJumped = false;
 
     public void reset() {
         coyoteTimer = 0;
         jumpBufferTimer = 0;
+        dropThroughTimer = 0;
         hasJumpCut = false;
         hasAirJumped = false;
     }

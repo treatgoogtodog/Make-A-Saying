@@ -49,6 +49,8 @@ public final class MovementTuningLoader {
         int coyoteTicks = root.get("coyoteTicks").asInt();
         int jumpBufferTicks = root.get("jumpBufferTicks").asInt();
         int cornerCorrectionPx = root.get("cornerCorrectionPx").asInt();
+        int slopeSnapPx = root.has("slopeSnapPx") ? root.get("slopeSnapPx").asInt() : 4;
+        int dropThroughTicks = root.has("dropThroughTicks") ? root.get("dropThroughTicks").asInt() : 8;
 
         // Range checks
         if (groundAccel <= 0 || groundFriction <= 0 || groundTurnaroundAccel <= 0) {
@@ -93,6 +95,8 @@ public final class MovementTuningLoader {
             coyoteTicks,
             jumpBufferTicks,
             cornerCorrectionPx,
+            slopeSnapPx,
+            dropThroughTicks,
             tickRate
         );
     }

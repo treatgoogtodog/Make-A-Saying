@@ -24,7 +24,7 @@ import com.makeasaying.engine.loop.FrameTimer;
 import com.makeasaying.engine.render.VirtualScreen;
 import com.makeasaying.engine.util.Log;
 import com.makeasaying.engine.util.LogCategory;
-import com.makeasaying.game.demo.DemoSceneM3;
+import com.makeasaying.game.demo.DemoSceneM4;
 
 import java.nio.file.Path;
 
@@ -53,7 +53,7 @@ public class PlatformerGame implements ApplicationListener {
     private ReplayData lastRecordedReplay;
 
     // Temporary demo scene - single deletion point for M5
-    private DemoSceneM3 demoScene;
+    private DemoSceneM4 demoScene;
 
     public PlatformerGame(EngineConfig config) {
         this.config = config != null ? config : EngineConfig.defaultConfig();
@@ -102,8 +102,8 @@ public class PlatformerGame implements ApplicationListener {
             }
         });
 
-        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m3_hash");
-        this.demoScene = new DemoSceneM3(movementTuning);
+        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m4_hash");
+        this.demoScene = new DemoSceneM4(movementTuning);
     }
 
     @Override

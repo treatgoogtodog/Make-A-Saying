@@ -19,6 +19,8 @@ public final class BodyComponent {
     public boolean grounded;
     public boolean wasGrounded;
 
+    public long supportId = 0L; // Platform entity ID currently supporting this body (0 = none)
+
     public BodyComponent(int initialX, int initialY) {
         resetPosition(initialX, initialY);
     }
@@ -38,5 +40,6 @@ public final class BodyComponent {
         this.vy = 0f;
         this.grounded = false;
         this.wasGrounded = false;
+        this.supportId = 0L;
     }
 }

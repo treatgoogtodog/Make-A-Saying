@@ -18,8 +18,8 @@ Per Section 7.2 and 7.3 of `AGENTS.md`, systems in the engine run in a fixed, do
 1. **Cutscene Runner**: Advances active cutscene blocks and hops.
 2. **Input Collection**: In first tick of frame, drains raw queue (at most 1 transition per button per tick, trailing releases deferred to next tick); catch-up ticks suppress 'pressed'; updates digital axes with last-pressed-wins (DEC-004); swallows held keys on context change.
 3. **AI and Lua Behaviors**: Translates entity decisions into `InputState`.
-4. **Moving Platforms**: Updates positions of platforms first before carrying riders.
-5. **Movement and Collision**: Step custom AABB against tile grid (one axis at a time, integer pixel steps with subpixel remainder); carries riders; emits `onHitWall`, `onLand`, `onHitCeiling`.
+4. **Moving Platforms (`PlatformSystem`)**: Updates ping-pong platform positions first using whole-pixel remainder stepping; carries riders with wall-blocking checks; pushes displaced entities with `BLOCK` (halt) or `CRUSH` (emit `CRUSHED` event) squish rules.
+5. **Movement and Collision (`MovementSystem`)**: Step custom AABB against tile grid (one axis at a time, integer pixel steps with subpixel remainder); stuck-body detection; drop-through on one-way platforms (down + jump suppresses jump buffer); grounded slope surface sampling (`feetX - 1` and `feetX`) and slope snapping (`slopeSnapPx`); emits `HIT_WALL`, `LANDED`, `HIT_CEILING`.
 6. **Combat**: Hurtbox / Hitbox overlap, damage calculations, recoil impulses.
 7. **Death System**: State machine transitions (`CEASE` -> `COLLAPSE` / `FALLING` -> `LANDED` -> `RESOLVE`), slope checks, emits `entity_died`.
 8. **Triggers and Zones**: Overlap checks for triggers, camera bounds, room exits.

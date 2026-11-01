@@ -22,6 +22,8 @@ public record MovementTuning(
     int coyoteTicks,
     int jumpBufferTicks,
     int cornerCorrectionPx,
+    int slopeSnapPx,
+    int dropThroughTicks,
 
     // Precomputed per-tick values
     float groundAccelPerTick,
@@ -55,10 +57,21 @@ public record MovementTuning(
         int coyoteTicks,
         int jumpBufferTicks,
         int cornerCorrectionPx,
+        int slopeSnapPx,
+        int dropThroughTicks,
         int tickRate
     ) {
         float rate = (float) tickRate;
         float rateSq = rate * rate;
+        float maxRunSpeedPerTick = maxRunSpeed / rate;
+
+        int minSlopeSnapPx = (int) Math.ceil(maxRunSpeedPerTick) + 1;
+        if (slopeSnapPx < minSlopeSnapPx) {
+            throw new IllegalArgumentException("slopeSnapPx (" + slopeSnapPx + ") must be at least ceil(maxRunSpeedPerTick) + 1 (" + minSlopeSnapPx + ")");
+        }
+        if (dropThroughTicks < 1) {
+            throw new IllegalArgumentException("dropThroughTicks must be positive");
+        }
 
         return new MovementTuning(
             version,
@@ -77,17 +90,46 @@ public record MovementTuning(
             coyoteTicks,
             jumpBufferTicks,
             cornerCorrectionPx,
+            slopeSnapPx,
+            dropThroughTicks,
             groundAccel / rateSq,
             groundFriction / rateSq,
             groundTurnaroundAccel / rateSq,
             airAccel / rateSq,
             airFriction / rateSq,
             airTurnaroundAccel / rateSq,
-            maxRunSpeed / rate,
+            maxRunSpeedPerTick,
             jumpSpeed / rate,
             riseGravity / rateSq,
             fallGravity / rateSq,
             maxFallSpeed / rate
+        );
+    }
+
+    public static MovementTuning fromHumanUnits(
+        int version,
+        float groundAccel,
+        float groundFriction,
+        float groundTurnaroundAccel,
+        float airAccel,
+        float airFriction,
+        float airTurnaroundAccel,
+        float maxRunSpeed,
+        float jumpSpeed,
+        float jumpCutMultiplier,
+        float riseGravity,
+        float fallGravity,
+        float maxFallSpeed,
+        int coyoteTicks,
+        int jumpBufferTicks,
+        int cornerCorrectionPx,
+        int tickRate
+    ) {
+        return fromHumanUnits(
+            version, groundAccel, groundFriction, groundTurnaroundAccel,
+            airAccel, airFriction, airTurnaroundAccel, maxRunSpeed, jumpSpeed,
+            jumpCutMultiplier, riseGravity, fallGravity, maxFallSpeed,
+            coyoteTicks, jumpBufferTicks, cornerCorrectionPx, 4, 8, tickRate
         );
     }
 
@@ -109,6 +151,8 @@ public record MovementTuning(
             6,
             6,
             4,
+            4,
+            8,
             tickRate
         );
     }

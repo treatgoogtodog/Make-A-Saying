@@ -91,3 +91,5 @@ This document defines all file formats used in the project, their schemas, units
   - `coyoteTicks` (int, ticks): Number of ticks after leaving a ledge where jump is permitted.
   - `jumpBufferTicks` (int, ticks): Number of ticks an early jump press is remembered.
   - `cornerCorrectionPx` (int, pixels): Maximum ceiling corner overhang pushed around tile edges.
+  - `slopeSnapPx` (int, pixels): Maximum downward vertical step snapped to keep grounded on descending slopes. Must be >= ceil(maxRunSpeed/tickRate) + 1.
+  - `dropThroughTicks` (int, ticks): Number of ticks one-way platforms are ignored after pressing Down + Jump.
