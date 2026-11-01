@@ -118,11 +118,50 @@ class TransitionDeterminismTest {
         }
 
         assertEquals(ticksA, ticksB, "Tick counter must advance by exact same amount regardless of loading delays");
+        assertEquals(30, ticksA, "Total ticks from exit trigger in IDLE to return to IDLE must be 30 (1 trigger + 12 fade out + 4 hold + 1 swap + 12 fade in)");
         assertEquals(10, suspendedTicks, "Suspended ticks must occur while waiting for worker preload");
 
         long hashA = GameStateHash.compute(worldA, curRoomA, transA, storeA);
         long hashB = GameStateHash.compute(worldB, curRoomB, transB, storeB);
 
         assertEquals(hashA, hashB, "GameStateHash must be bit-identical between immediate and delayed loads");
+    }
+
+    @Test
+    public void testStalledLoaderTimesOutAndAbortsTransition() {
+        RoomTransitionConfig config = new RoomTransitionConfig(12, 4, 12);
+        RoomTransitionManager manager = new RoomTransitionManager(config);
+
+        World world = new World();
+        long playerId = world.createEntity();
+        world.setBody(playerId, new com.makeasaying.engine.entity.components.BodyComponent(32, 16));
+        world.setCollider(playerId, new com.makeasaying.engine.entity.components.ColliderComponent(12, 36));
+
+        RoomExit exit = new RoomExit("exit_1", 20, 0, 24, 48, "stalled_room", "default");
+        manager.startTransition(exit);
+
+        // Fade out 12 ticks
+        for (int i = 0; i < 12; i++) {
+            assertTrue(manager.update(playerId, world, null, () -> false, e -> {}));
+        }
+        assertEquals(RoomTransitionState.HOLD_WAIT_SWAP, manager.getState());
+
+        // Hold 4 ticks
+        for (int i = 0; i < 4; i++) {
+            assertTrue(manager.update(playerId, world, null, () -> false, e -> {}));
+        }
+
+        // Target is checked and not ready: returns false and increments wait timeout
+        for (int i = 0; i < RoomTransitionManager.TIMEOUT_TICKS; i++) {
+            boolean advanced = manager.update(playerId, world, null, () -> false, e -> {});
+            assertFalse(advanced, "Tick advance must remain suspended while waiting");
+            assertTrue(manager.isWaitingForLoad());
+        }
+
+        // 601st wait call exceeds timeout: aborts transition and fades back in!
+        boolean abortFrameAdvanced = manager.update(playerId, world, null, () -> false, e -> {});
+        assertTrue(abortFrameAdvanced, "Aborting must resume frame advance to fade back in");
+        assertEquals(RoomTransitionState.FADE_IN, manager.getState());
+        assertTrue(manager.isExitDisabled("exit_1"), "Exit must be disabled upon abort");
     }
 }

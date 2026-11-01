@@ -100,6 +100,16 @@ public final class RoomRenderer {
         return placeholderRegion;
     }
 
+    public TextureRegion getRegion(String tilesetId, String tileId) {
+        String key = tilesetId + ":" + tileId;
+        TextureRegion region = regionCache.get(key);
+        return region != null ? region : placeholderRegion;
+    }
+
+    public TextureRegion getPlaceholderRegion() {
+        return placeholderRegion;
+    }
+
     public void clearCache() {
         regionCache.clear();
     }

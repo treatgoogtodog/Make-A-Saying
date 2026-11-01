@@ -31,3 +31,17 @@ Per Section 7.2 and 7.3 of `AGENTS.md`, systems in the engine run in a fixed, do
 9. **Event Dispatch**: Deterministic processing of tick event queue with cascade limit.
 10. **Animation Advance**: Advances tick-based `Animator` components and produces frame events.
 11. **Deferred Spawn / Despawn**: Entity lifecycle changes deferred to the very end of the tick.
+
+
+---
+
+## Editor Mode Update Order (M6a / DEC-024)
+When running in `EDITOR` mode:
+1. Input drained and polled at event time via `ImGuiInputProcessor`. If ImGui captures keyboard/mouse, events are consumed by ImGui.
+2. In `EDITING` mode: simulation systems are paused. Viewport renders room layers via `RoomRenderer` into an FBO.
+3. In `PLAY` mode:
+   - System 1: `PlayerControlSystem.update(playWorld, activeState)`
+   - System 2: `PlatformSystem.update(playWorld, playGrid)`
+   - System 3: `MovementSystem.update(playWorld, playGrid)`
+   - Exits: Checked for overlap, but room transitions are suppressed; exit contact is logged to `LogCategory.ENGINE`.
+   - On Stop (F8): `WorldSnapshot` restored bit-for-bit to original pre-play state.

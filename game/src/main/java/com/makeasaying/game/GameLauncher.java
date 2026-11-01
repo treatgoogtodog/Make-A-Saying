@@ -22,6 +22,7 @@ public final class GameLauncher {
         Log.info(LogCategory.GENERAL, "Starting %s (v%d)...", config.windowTitle(), config.version());
 
         Lwjgl3ApplicationConfiguration appConfig = new Lwjgl3ApplicationConfiguration();
+        appConfig.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.GL30, 3, 2);
         appConfig.setTitle(config.windowTitle());
         appConfig.setWindowedMode(config.windowWidth(), config.windowHeight());
         appConfig.setWindowSizeLimits(320, 180, -1, -1);

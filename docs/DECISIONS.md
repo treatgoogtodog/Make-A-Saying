@@ -217,3 +217,40 @@ Format for entries:
   3. Keys that remain held down after fade-in completes apply normally upon entering `IDLE`. Any tap that begins and ends entirely within the transition window is consumed without affecting gameplay.
 - **Alternatives Considered**: Dropping all input events during transitions (rejected: corrupts replay synchronization).
 - **Reversibility**: Easy.
+
+
+---
+
+### DEC-021: OpenGL 3.2 Core Context for ImGui 1.89
+- **Date**: 2026-11-01
+- **Context**: Dear ImGui 1.89 via `imgui-java` on LWJGL3 GL context requires an OpenGL 3.2+ Core profile when using `#version 150` GLSL shader.
+- **Choice**: Configured `appConfig.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.GL30, 3, 2)` in `GameLauncher`.
+- **Alternatives Considered**: OpenGL ES / legacy compatibility profile (rejected: incompatible with `#version 150` on modern desktop GL drivers).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-022: Event-Time ImGui Capture and Stuck-Key Prevention
+- **Date**: 2026-11-01
+- **Context**: If `wantCaptureKeyboard` or `wantCaptureMouse` is evaluated only during tick drain, keys pressed while typing in an ImGui text field could leak release events or stick down in the game layer.
+- **Choice**: `ImGuiInputProcessor` evaluates capture at OS event time, tracking active game keys in `gameKeysDown[]` and buttons in `gameButtonsDown[]`. Any key down seen by the game is guaranteed to receive its matching up event, while keys consumed by ImGui never reach the game.
+- **Alternatives Considered**: Polling `WantCaptureKeyboard` at tick time (rejected: causes stuck keys when focus changes mid-tick).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-023: Atomic File Writer Protocol
+- **Date**: 2026-11-01
+- **Context**: Writing room or save files directly risks file corruption or truncation if interrupted.
+- **Choice**: Implemented `AtomicFileWriter` in `data` writing to `<target>.tmp`, syncing with `FileChannel.force(true)`, preserving a `<target>.bak` backup of the existing target file, and atomically moving to `<target>` via `Files.move(ATOMIC_MOVE, REPLACE_EXISTING)`.
+- **Alternatives Considered**: Direct write via `Files.writeString` (rejected: lacks backup and atomic replace guarantee).
+- **Reversibility**: Easy.
+
+---
+
+### DEC-024: Editor Play Mode Snapshot and In-Memory Simulation
+- **Date**: 2026-11-01
+- **Context**: AGENTS.md Principle 4.2 / 4.10 requires in-game tools to preview with the real runtime simulation with zero hidden state and clean restoration on Stop.
+- **Choice**: Editor Play mode takes a deep-copied `WorldSnapshot`, instantiates the player via `PlayerFactory`, simulates the real `MovementSystem` and `PlatformSystem` on the in-memory `RoomGrid`, suppresses room transitions (logging exit contacts only), and restores the `WorldSnapshot` on Stop bit-for-bit.
+- **Alternatives Considered**: Running a separate editor-only simulation (rejected: explicitly forbidden by Principle 4.2).
+- **Reversibility**: Easy.

@@ -323,4 +323,220 @@ public final class World {
         }
         return h;
     }
+
+    public WorldSnapshot snapshot() {
+        int[] snapGenerations = generations.clone();
+        boolean[] snapAlive = alive.clone();
+        int[] snapFreeIndices = freeIndices.clone();
+        int snapFreeCount = freeCount;
+
+        long[] snapDefSpawns = deferredSpawns.clone();
+        int snapDefSpawnsCount = deferredSpawnsCount;
+        long[] snapDefDespawns = deferredDespawns.clone();
+        int snapDefDespawnsCount = deferredDespawnsCount;
+
+        BodyComponent[] snapBodies = new BodyComponent[MAX_ENTITIES];
+        ColliderComponent[] snapColliders = new ColliderComponent[MAX_ENTITIES];
+        FacingComponent[] snapFacings = new FacingComponent[MAX_ENTITIES];
+        ControllerComponent[] snapControllers = new ControllerComponent[MAX_ENTITIES];
+        InputStateComponent[] snapInputStates = new InputStateComponent[MAX_ENTITIES];
+        JumpStateComponent[] snapJumpStates = new JumpStateComponent[MAX_ENTITIES];
+        com.makeasaying.engine.entity.components.PlatformComponent[] snapPlatforms = new com.makeasaying.engine.entity.components.PlatformComponent[MAX_ENTITIES];
+        com.makeasaying.engine.entity.components.RoomScopeComponent[] snapRoomScopes = new com.makeasaying.engine.entity.components.RoomScopeComponent[MAX_ENTITIES];
+
+        for (int i = 1; i < MAX_ENTITIES; i++) {
+            if (!alive[i]) continue;
+
+            BodyComponent b = bodies[i];
+            if (b != null) {
+                BodyComponent copy = new BodyComponent(b.x, b.y);
+                copy.subpixelX = b.subpixelX;
+                copy.subpixelY = b.subpixelY;
+                copy.prevX = b.prevX;
+                copy.prevY = b.prevY;
+                copy.vx = b.vx;
+                copy.vy = b.vy;
+                copy.grounded = b.grounded;
+                copy.wasGrounded = b.wasGrounded;
+                copy.supportId = b.supportId;
+                snapBodies[i] = copy;
+            }
+
+            ColliderComponent c = colliders[i];
+            if (c != null) {
+                ColliderComponent copy = new ColliderComponent(c.width, c.height);
+                copy.offsetX = c.offsetX;
+                copy.offsetY = c.offsetY;
+                snapColliders[i] = copy;
+            }
+
+            FacingComponent f = facings[i];
+            if (f != null) {
+                snapFacings[i] = new FacingComponent(f.direction);
+            }
+
+            ControllerComponent ctrl = controllers[i];
+            if (ctrl != null) {
+                ControllerComponent copy = new ControllerComponent(ctrl.source);
+                copy.puppet = ctrl.puppet;
+                snapControllers[i] = copy;
+            }
+
+            InputStateComponent in = inputStates[i];
+            if (in != null && in.state != null) {
+                snapInputStates[i] = new InputStateComponent(in.state.copy());
+            }
+
+            JumpStateComponent js = jumpStates[i];
+            if (js != null) {
+                JumpStateComponent copy = new JumpStateComponent();
+                copy.coyoteTimer = js.coyoteTimer;
+                copy.jumpBufferTimer = js.jumpBufferTimer;
+                copy.dropThroughTimer = js.dropThroughTimer;
+                copy.hasJumpCut = js.hasJumpCut;
+                copy.hasAirJumped = js.hasAirJumped;
+                snapJumpStates[i] = copy;
+            }
+
+            com.makeasaying.engine.entity.components.PlatformComponent p = platforms[i];
+            if (p != null) {
+                com.makeasaying.engine.entity.components.PlatformComponent copy =
+                    new com.makeasaying.engine.entity.components.PlatformComponent(
+                        p.startX, p.startY, p.endX, p.endY, p.width, p.height, p.speed, p.pauseTicks, p.crushMode
+                    );
+                copy.currentX = p.currentX;
+                copy.currentY = p.currentY;
+                copy.prevX = p.prevX;
+                copy.prevY = p.prevY;
+                copy.remainderX = p.remainderX;
+                copy.remainderY = p.remainderY;
+                copy.pauseTimer = p.pauseTimer;
+                copy.direction = p.direction;
+                snapPlatforms[i] = copy;
+            }
+
+            com.makeasaying.engine.entity.components.RoomScopeComponent rs = roomScopes[i];
+            if (rs != null) {
+                snapRoomScopes[i] = new com.makeasaying.engine.entity.components.RoomScopeComponent(rs.scope);
+            }
+        }
+
+        return new WorldSnapshot(
+            snapGenerations, snapAlive, snapFreeIndices, snapFreeCount,
+            snapDefSpawns, snapDefSpawnsCount, snapDefDespawns, snapDefDespawnsCount,
+            snapBodies, snapColliders, snapFacings, snapControllers, snapInputStates,
+            snapJumpStates, snapPlatforms, snapRoomScopes
+        );
+    }
+
+    public void restore(WorldSnapshot snapshot) {
+        if (snapshot == null) throw new IllegalArgumentException("snapshot must not be null");
+
+        System.arraycopy(snapshot.generations, 0, this.generations, 0, MAX_ENTITIES);
+        System.arraycopy(snapshot.alive, 0, this.alive, 0, MAX_ENTITIES);
+        System.arraycopy(snapshot.freeIndices, 0, this.freeIndices, 0, MAX_ENTITIES);
+        this.freeCount = snapshot.freeCount;
+
+        System.arraycopy(snapshot.deferredSpawns, 0, this.deferredSpawns, 0, MAX_ENTITIES);
+        this.deferredSpawnsCount = snapshot.deferredSpawnsCount;
+        System.arraycopy(snapshot.deferredDespawns, 0, this.deferredDespawns, 0, MAX_ENTITIES);
+        this.deferredDespawnsCount = snapshot.deferredDespawnsCount;
+
+        eventQueue.clear();
+
+        for (int i = 0; i < MAX_ENTITIES; i++) {
+            if (!this.alive[i]) {
+                bodies[i] = null;
+                colliders[i] = null;
+                facings[i] = null;
+                controllers[i] = null;
+                inputStates[i] = null;
+                jumpStates[i] = null;
+                platforms[i] = null;
+                roomScopes[i] = null;
+                continue;
+            }
+
+            BodyComponent b = snapshot.bodies[i];
+            if (b != null) {
+                BodyComponent copy = new BodyComponent(b.x, b.y);
+                copy.subpixelX = b.subpixelX;
+                copy.subpixelY = b.subpixelY;
+                copy.prevX = b.prevX;
+                copy.prevY = b.prevY;
+                copy.vx = b.vx;
+                copy.vy = b.vy;
+                copy.grounded = b.grounded;
+                copy.wasGrounded = b.wasGrounded;
+                copy.supportId = b.supportId;
+                bodies[i] = copy;
+            } else {
+                bodies[i] = null;
+            }
+
+            ColliderComponent c = snapshot.colliders[i];
+            if (c != null) {
+                ColliderComponent copy = new ColliderComponent(c.width, c.height);
+                copy.offsetX = c.offsetX;
+                copy.offsetY = c.offsetY;
+                colliders[i] = copy;
+            } else {
+                colliders[i] = null;
+            }
+
+            FacingComponent f = snapshot.facings[i];
+            facings[i] = f != null ? new FacingComponent(f.direction) : null;
+
+            ControllerComponent ctrl = snapshot.controllers[i];
+            if (ctrl != null) {
+                ControllerComponent copy = new ControllerComponent(ctrl.source);
+                copy.puppet = ctrl.puppet;
+                controllers[i] = copy;
+            } else {
+                controllers[i] = null;
+            }
+
+            InputStateComponent in = snapshot.inputStates[i];
+            if (in != null && in.state != null) {
+                inputStates[i] = new InputStateComponent(in.state.copy());
+            } else {
+                inputStates[i] = null;
+            }
+
+            JumpStateComponent js = snapshot.jumpStates[i];
+            if (js != null) {
+                JumpStateComponent copy = new JumpStateComponent();
+                copy.coyoteTimer = js.coyoteTimer;
+                copy.jumpBufferTimer = js.jumpBufferTimer;
+                copy.dropThroughTimer = js.dropThroughTimer;
+                copy.hasJumpCut = js.hasJumpCut;
+                copy.hasAirJumped = js.hasAirJumped;
+                jumpStates[i] = copy;
+            } else {
+                jumpStates[i] = null;
+            }
+
+            com.makeasaying.engine.entity.components.PlatformComponent p = snapshot.platforms[i];
+            if (p != null) {
+                com.makeasaying.engine.entity.components.PlatformComponent copy =
+                    new com.makeasaying.engine.entity.components.PlatformComponent(
+                        p.startX, p.startY, p.endX, p.endY, p.width, p.height, p.speed, p.pauseTicks, p.crushMode
+                    );
+                copy.currentX = p.currentX;
+                copy.currentY = p.currentY;
+                copy.prevX = p.prevX;
+                copy.prevY = p.prevY;
+                copy.remainderX = p.remainderX;
+                copy.remainderY = p.remainderY;
+                copy.pauseTimer = p.pauseTimer;
+                copy.direction = p.direction;
+                platforms[i] = copy;
+            } else {
+                platforms[i] = null;
+            }
+
+            com.makeasaying.engine.entity.components.RoomScopeComponent rs = snapshot.roomScopes[i];
+            roomScopes[i] = rs != null ? new com.makeasaying.engine.entity.components.RoomScopeComponent(rs.scope) : null;
+        }
+    }
 }

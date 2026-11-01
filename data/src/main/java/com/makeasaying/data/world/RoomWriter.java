@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.core.util.Separators;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.makeasaying.data.util.AtomicFileWriter;
 import com.makeasaying.engine.world.Room;
 
 import java.io.IOException;
@@ -36,17 +37,8 @@ public final class RoomWriter {
     }
 
     public static void save(Room room, Path path, int version) throws IOException {
-        if (path.getParent() != null) {
-            Files.createDirectories(path.getParent());
-        }
-
-        RoomLoader.RoomData data = RoomLoader.toData(room, version);
-        String json = MAPPER.writer(createPrinter()).writeValueAsString(data);
-        if (!json.endsWith("\n")) {
-            json += "\n";
-        }
-
-        Files.writeString(path, json, StandardCharsets.UTF_8);
+        String json = toJson(room, version);
+        AtomicFileWriter.write(path, json);
     }
 
     public static String toJson(Room room, int version) throws IOException {

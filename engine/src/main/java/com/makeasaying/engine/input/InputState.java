@@ -155,4 +155,10 @@ public final class InputState {
         System.arraycopy(source.lastPressedOrder, 0, this.lastPressedOrder, 0, this.lastPressedOrder.length);
         this.globalPressCounter = source.globalPressCounter;
     }
+
+    public InputState copy() {
+        InputState result = new InputState(this.registry);
+        result.copyFrom(this);
+        return result;
+    }
 }

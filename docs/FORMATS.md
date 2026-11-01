@@ -237,3 +237,15 @@ Test tilesets (`test_area.png` and `test_area_b.png`) can be regenerated determi
 ./gradlew generateTestTiles
 ```
 The generator source code is maintained in `data/src/test/java/com/makeasaying/data/tools/TileSheetGenerator.java`.
+
+
+---
+
+## Atomic Save File Format Protocol (M6a / DEC-023)
+- Path: `content/rooms/*.json` and future saves in OS per-user data directory.
+- Protocol:
+  1. Writes serialized JSON payload with 2-space indentation and trailing LF to `<target>.tmp`.
+  2. Forces disk sync via `FileChannel.force(true)`.
+  3. If previous file exists at `<target>`, copies it to `<target>.bak` (`REPLACE_EXISTING`).
+  4. Atomically renames `<target>.tmp` to `<target>` (`ATOMIC_MOVE` with fallback to `REPLACE_EXISTING`).
+  5. Cleans up temporary file on failure.

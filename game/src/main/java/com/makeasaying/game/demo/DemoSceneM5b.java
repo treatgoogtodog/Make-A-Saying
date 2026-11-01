@@ -176,14 +176,7 @@ public final class DemoSceneM5b implements Disposable {
             .findFirst()
             .orElse(currentRoom.spawnPoints().isEmpty() ? new SpawnPoint("default", 32, 16) : currentRoom.spawnPoints().get(0));
 
-        this.playerId = world.createEntity();
-        world.setBody(playerId, new BodyComponent(spawn.x(), spawn.y()));
-        world.setCollider(playerId, new ColliderComponent(12, 36));
-        world.setFacing(playerId, new FacingComponent(1));
-        world.setController(playerId, new ControllerComponent(ControlSource.PLAYER));
-        world.setJumpState(playerId, new JumpStateComponent());
-        world.setRoomScope(playerId, new RoomScopeComponent(RoomScopeComponent.Scope.PERSISTENT_CARRIED));
-        world.applyDeferredLifecycle();
+        this.playerId = com.makeasaying.engine.entity.PlayerFactory.createPlayer(world, spawn.x(), spawn.y());
 
         camera.reset(spawn.x(), spawn.y(), currentRoom.width(), currentRoom.height(), TILE_SIZE);
     }
@@ -258,6 +251,18 @@ public final class DemoSceneM5b implements Disposable {
 
     public boolean isWaitingForLoad() {
         return transitionManager.isWaitingForLoad();
+    }
+
+    public void pumpWaitingTransition() {
+        if (transitionManager.isWaitingForLoad()) {
+            transitionManager.update(
+                playerId,
+                world,
+                currentRoom,
+                () -> transitionManager.getPendingExit() != null && roomCache.get(transitionManager.getPendingExit().targetRoom()) != null,
+                this::performRoomSwap
+            );
+        }
     }
 
     public void tick(long currentTick, InputState playerInput) {
@@ -484,6 +489,10 @@ public final class DemoSceneM5b implements Disposable {
         return movementSystem;
     }
 
+    public PlayerControlSystem getControlSystem() {
+        return controlSystem;
+    }
+
     public PlatformSystem getPlatformSystem() {
         return platformSystem;
     }
@@ -502,6 +511,22 @@ public final class DemoSceneM5b implements Disposable {
 
     public long getPlayerId() {
         return playerId;
+    }
+
+    public Room getCurrentRoom() {
+        return currentRoom;
+    }
+
+    public Map<String, Tileset> getLoadedTilesets() {
+        return loadedTilesets;
+    }
+
+    public RoomRenderer getRoomRenderer() {
+        return roomRenderer;
+    }
+
+    public Path getRoomsDir() {
+        return roomsDir;
     }
 
     @Override

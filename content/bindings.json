@@ -10,6 +10,15 @@
       ],
       "debug_playback": [
         "KEY_F6"
+      ],
+      "toggle_editor": [
+        "KEY_F1"
+      ],
+      "editor_play": [
+        "KEY_F7"
+      ],
+      "editor_stop": [
+        "KEY_F8"
       ]
     },
     "gameplay": {

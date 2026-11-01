@@ -20,4 +20,8 @@ public final class Actions {
 
     public static final String DEBUG_RECORD = "debug_record";
     public static final String DEBUG_PLAYBACK = "debug_playback";
+
+    public static final String TOGGLE_EDITOR = "toggle_editor";
+    public static final String EDITOR_PLAY = "editor_play";
+    public static final String EDITOR_STOP = "editor_stop";
 }

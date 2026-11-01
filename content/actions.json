@@ -58,6 +58,19 @@
     {
       "id": "debug_playback",
       "type": "button"
+    },
+    {
+      "id": "toggle_editor",
+      "type": "button",
+      "reserved": true
+    },
+    {
+      "id": "editor_play",
+      "type": "button"
+    },
+    {
+      "id": "editor_stop",
+      "type": "button"
     }
   ]
 }

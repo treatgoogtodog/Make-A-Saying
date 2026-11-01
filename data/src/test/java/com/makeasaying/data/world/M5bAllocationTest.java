@@ -61,6 +61,7 @@ class M5bAllocationTest {
 
         long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
         long allocated = memAfter - memBefore;
+        System.out.println("Ordinary ticks allocated bytes over " + ITERATIONS + " iterations: " + allocated);
 
         assertTrue(allocated < 1024, "Ordinary ticks must have zero heap allocation (was " + allocated + " bytes)");
     }
@@ -110,6 +111,7 @@ class M5bAllocationTest {
 
         long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
         long allocated = memAfter - memBefore;
+        System.out.println("Transition ticks allocated bytes over " + ITERATIONS + " iterations: " + allocated);
 
         assertTrue(allocated < 1024, "Fade ticks must have zero heap allocation (was " + allocated + " bytes)");
     }
@@ -159,6 +161,7 @@ class M5bAllocationTest {
 
         long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
         long allocated = memAfter - memBefore;
+        System.out.println("Suspended ticks allocated bytes over " + ITERATIONS + " iterations: " + allocated);
 
         assertTrue(allocated < 1024, "Suspended ticks must have zero heap allocation (was " + allocated + " bytes)");
     }
