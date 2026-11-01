@@ -26,4 +26,11 @@ public enum TileShape {
             default -> throw new IllegalArgumentException("Unknown tile shape id: " + id);
         };
     }
+
+    public static TileShape fromName(String name) {
+        if (name == null) {
+            return EMPTY;
+        }
+        return TileShape.valueOf(name.toUpperCase(java.util.Locale.ROOT));
+    }
 }

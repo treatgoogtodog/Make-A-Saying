@@ -93,3 +93,108 @@ This document defines all file formats used in the project, their schemas, units
   - `cornerCorrectionPx` (int, pixels): Maximum ceiling corner overhang pushed around tile edges.
   - `slopeSnapPx` (int, pixels): Maximum downward vertical step snapped to keep grounded on descending slopes. Must be >= ceil(maxRunSpeed/tickRate) + 1.
   - `dropThroughTicks` (int, ticks): Number of ticks one-way platforms are ignored after pressing Down + Jump.
+
+---
+
+## Tileset Format (`content/tilesets/<id>.json`)
+- **Location**: `content/tilesets/<id>.json`
+- **Current Version**: `1`
+- **Fields**:
+  - `version` (int, required): File format version.
+  - `id` (string, required): Stable ASCII tileset ID (`^[a-z0-9_.]+$`).
+  - `area` (string, required): Area identifier this tileset belongs to (e.g. `"test_area"`, `"lab"`, `"outdoor"`).
+  - `tileSize` (int, required): Tile pixel size, must match engine virtual config (default `16`).
+  - `image` (string, required): Relative path to tile sheet PNG within `content/tilesets/`.
+  - `tiles` (list of objects, required):
+    - `id` (string, required): Stable tile ID within tileset (e.g. `"solid_01"`, `"slope_r"`).
+    - `col` (int, required): Zero-based horizontal column in tile sheet texture.
+    - `row` (int, required): Zero-based vertical row in tile sheet texture (row 0 at top).
+    - `shape` (string, required): Global collision shape: `"EMPTY"`, `"SOLID"`, `"ONE_WAY"`, `"SLOPE_45_UP_RIGHT"`, `"SLOPE_45_UP_LEFT"`.
+    - `role` (string, required): Functional tag: `"fill"`, `"wall"`, `"slope_r45"`, `"slope_l45"`, `"slope_fill"`, `"platform"`, `"ceiling"`, `"corner"`.
+    - `tags` (list of strings, optional): Authoring/decorative tags.
+
+### Example Tileset JSON
+```json
+{
+  "version": 1,
+  "id": "test_area",
+  "area": "test_area",
+  "tileSize": 16,
+  "image": "test_area.png",
+  "tiles": [
+    {
+      "id": "solid_01",
+      "col": 0,
+      "row": 0,
+      "shape": "SOLID",
+      "role": "fill"
+    },
+    {
+      "id": "slope_r",
+      "col": 1,
+      "row": 0,
+      "shape": "SLOPE_45_UP_RIGHT",
+      "role": "slope_r45"
+    }
+  ]
+}
+```
+
+---
+
+## Room Format (`content/rooms/<id>.json`)
+- **Location**: `content/rooms/<id>.json`
+- **Current Version**: `1`
+- **Fields**:
+  - `version` (int, required): File format version.
+  - `id` (string, required): Stable ASCII room ID (`^[a-z0-9_.]+$`).
+  - `width` (int, required): Width of room in tiles.
+  - `height` (int, required): Height of room in tiles.
+  - `tilesets` (list of objects, required): Tileset alias table for room:
+    - `alias` (string, required): 1-2 lowercase letters (`^[a-z]{1,2}$`, e.g. `"a"`, `"lab"`).
+    - `id` (string, required): Referenced tileset ID.
+  - `layers` (map of string -> list of strings, required): Layer map. Mandatory layer is `"main"`. Optional layers include `"far_background"`, `"near_background"`, `"decoration"`, `"foreground"`.
+    - Each layer contains `height` rows.
+    - Each row contains `width` whitespace-separated tokens.
+    - Tokens are either `.` (empty tile) or `alias:tileId` (e.g. `a:solid_01`).
+    - Row order in JSON is top-to-bottom: row 0 is top of room (`y = height - 1`), row `height - 1` is floor (`y = 0`). Loaded inverted to Y-up in runtime memory.
+  - `spawnPoints` (list of objects, required):
+    - `id` (string, required): Stable spawn ID (`^[a-z0-9_.]+$`).
+    - `x` (int, required): Horizontal position in virtual pixels (feet).
+    - `y` (int, required): Vertical position in virtual pixels (feet).
+  - `entities` (list of objects, required):
+    - `instanceId` (string, required): Stable entity instance ID.
+    - `definition` (string, required): Entity definition ID.
+    - `x` (int, required): Spawn pixel X.
+    - `y` (int, required): Spawn pixel Y.
+    - `overrides` (map of string -> object, optional): Component property overrides.
+
+### Example Room JSON
+```json
+{
+  "version": 1,
+  "id": "test_01",
+  "width": 40,
+  "height": 12,
+  "tilesets": [
+    {
+      "alias": "a",
+      "id": "test_area"
+    }
+  ],
+  "layers": {
+    "main": [
+      "a:solid_01 a:solid_01 ...",
+      ". . . a:slope_r a:fill_01 ..."
+    ]
+  },
+  "spawnPoints": [
+    {
+      "id": "player_start",
+      "x": 32,
+      "y": 16
+    }
+  ],
+  "entities": []
+}
+```

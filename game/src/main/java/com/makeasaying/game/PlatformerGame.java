@@ -24,7 +24,7 @@ import com.makeasaying.engine.loop.FrameTimer;
 import com.makeasaying.engine.render.VirtualScreen;
 import com.makeasaying.engine.util.Log;
 import com.makeasaying.engine.util.LogCategory;
-import com.makeasaying.game.demo.DemoSceneM4;
+import com.makeasaying.game.demo.DemoSceneM5;
 
 import java.nio.file.Path;
 
@@ -52,8 +52,7 @@ public class PlatformerGame implements ApplicationListener {
     private InputReplayer replayer;
     private ReplayData lastRecordedReplay;
 
-    // Temporary demo scene - single deletion point for M5
-    private DemoSceneM4 demoScene;
+    private DemoSceneM5 demoScene;
 
     public PlatformerGame(EngineConfig config) {
         this.config = config != null ? config : EngineConfig.defaultConfig();
@@ -102,8 +101,8 @@ public class PlatformerGame implements ApplicationListener {
             }
         });
 
-        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m4_hash");
-        this.demoScene = new DemoSceneM4(movementTuning);
+        this.recorder = new InputRecorder(config.tickRate(), 12345L, "m5a_hash");
+        this.demoScene = new DemoSceneM5(movementTuning, jobs);
     }
 
     @Override
@@ -197,6 +196,9 @@ public class PlatformerGame implements ApplicationListener {
         if (frameTimer.shouldUpdateTitle(frameStart)) {
             if (tuningWatcher != null) {
                 tuningWatcher.poll();
+            }
+            if (demoScene != null) {
+                demoScene.pollWatcher();
             }
             String recordStatus = recorder.isRecording() ? " [REC]" : (replayer != null && replayer.isPlaying() ? " [PLAY]" : "");
             Gdx.graphics.setTitle(String.format("%s%s [Upd: %.2fms | Rnd: %.2fms | FPS: %d]",

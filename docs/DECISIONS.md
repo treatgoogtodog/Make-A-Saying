@@ -169,3 +169,21 @@ Format for entries:
 - **Choice**: Per AGENTS.md principle 4.3 (determinism) and section 7.5, leaving a moving platform does NOT impart platform momentum/velocity onto the entity. Entity velocity is governed entirely by standard `InputState` and physics tuning.
 - **Alternatives Considered**: Adding platform velocity to jumping entity (rejected: violates explicit specification and introduces momentum drift).
 - **Reversibility**: Easy.
+
+---
+
+### DEC-016: Room Warning Size Default Threshold
+- **Date**: 2026-11-01
+- **Context**: Open Decision 6 in Section 11 asks for the maximum room dimensions before flagging a room above an agreed maximum size.
+- **Choice**: Default warning threshold is set to 64x48 tiles (1024x768 pixels, roughly 3.2x by 4.2x screens at 320x180 virtual resolution). Rooms exceeding this threshold trigger a non-blocking `WARN_ROOM_SIZE` finding in `RoomValidator`.
+- **Alternatives Considered**: Hard-erroring on larger rooms (rejected: some special open areas might be wider; warning is sufficient to flag unexpected size).
+- **Reversibility**: Easy (configurable via `RoomValidator` constructor).
+
+---
+
+### DEC-017: Room Row Serialization and Coordinate Inversion
+- **Date**: 2026-11-01
+- **Context**: Room layer token grids are authored as rows of tokens in JSON. Natural text reading is top-to-bottom, while game world simulation coordinate space is Y-up (y=0 at floor).
+- **Choice**: Row 0 in JSON represents the top of the room (`y = height - 1`), and the final row in JSON represents the bottom of the room (`y = 0`). `RoomLoader` inverts row index `height - 1 - y` into runtime memory, and `RoomWriter` inverts back on save.
+- **Alternatives Considered**: Storing row 0 as y=0 in JSON (rejected: makes hand-editing and visual inspection in text editors inverted upside down).
+- **Reversibility**: Medium.

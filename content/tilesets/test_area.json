@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "id": "test_area",
+  "area": "test_area",
+  "tileSize": 16,
+  "image": "test_area.png",
+  "tiles": [
+    {
+      "id": "solid_01",
+      "col": 0,
+      "row": 0,
+      "shape": "SOLID",
+      "role": "fill"
+    },
+    {
+      "id": "slope_r",
+      "col": 1,
+      "row": 0,
+      "shape": "SLOPE_45_UP_RIGHT",
+      "role": "slope_r45"
+    },
+    {
+      "id": "slope_l",
+      "col": 2,
+      "row": 0,
+      "shape": "SLOPE_45_UP_LEFT",
+      "role": "slope_l45"
+    },
+    {
+      "id": "one_way_01",
+      "col": 3,
+      "row": 0,
+      "shape": "ONE_WAY",
+      "role": "platform"
+    },
+    {
+      "id": "wall_01",
+      "col": 0,
+      "row": 1,
+      "shape": "SOLID",
+      "role": "wall"
+    },
+    {
+      "id": "fill_01",
+      "col": 1,
+      "row": 1,
+      "shape": "SOLID",
+      "role": "slope_fill"
+    },
+    {
+      "id": "plat_01",
+      "col": 2,
+      "row": 1,
+      "shape": "SOLID",
+      "role": "platform"
+    }
+  ]
+}
