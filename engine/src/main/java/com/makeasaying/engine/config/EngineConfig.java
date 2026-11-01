@@ -12,6 +12,7 @@ public record EngineConfig(
     int windowWidth,
     int windowHeight,
     String windowTitle,
+    String borderColor,
     boolean vsync,
     int targetFps,
     float cmPerPixel,
@@ -19,6 +20,13 @@ public record EngineConfig(
     BodyColliderConfig bodyCollider
 ) {
     public static final int CURRENT_VERSION = 1;
+    public static final String DEFAULT_BORDER_COLOR = "#000000";
+
+    public EngineConfig {
+        if (borderColor == null || borderColor.isBlank()) {
+            borderColor = DEFAULT_BORDER_COLOR;
+        }
+    }
 
     public record BodyColliderConfig(
         int width,
@@ -30,6 +38,24 @@ public record EngineConfig(
         }
     }
 
+    public EngineConfig(
+        int version,
+        int virtualWidth,
+        int virtualHeight,
+        int tileSize,
+        int windowWidth,
+        int windowHeight,
+        String windowTitle,
+        boolean vsync,
+        int targetFps,
+        float cmPerPixel,
+        int headUnitPx,
+        BodyColliderConfig bodyCollider
+    ) {
+        this(version, virtualWidth, virtualHeight, tileSize, windowWidth, windowHeight,
+            windowTitle, DEFAULT_BORDER_COLOR, vsync, targetFps, cmPerPixel, headUnitPx, bodyCollider);
+    }
+
     public static EngineConfig defaultConfig() {
         return new EngineConfig(
             CURRENT_VERSION,
@@ -39,6 +65,7 @@ public record EngineConfig(
             1280,
             720,
             "Make-A-Saying",
+            DEFAULT_BORDER_COLOR,
             true,
             60,
             4.5f,

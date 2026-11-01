@@ -24,5 +24,6 @@ This document defines all file formats used in the project, their schemas, units
   - `windowWidth` (int, optional): Window width on desktop launch (default `1280`).
   - `windowHeight` (int, optional): Window height on desktop launch (default `720`).
   - `windowTitle` (string, optional): Window title.
+  - `borderColor` (string, optional): Hex color for integer scaling letterbox borders (default `"#000000"`).
   - `vsync` (bool, optional): Enable VSync (default `true`).
   - `targetFps` (int, optional): Target frame rate (default `60`).

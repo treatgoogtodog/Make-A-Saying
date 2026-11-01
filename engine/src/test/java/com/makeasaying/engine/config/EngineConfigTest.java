@@ -17,6 +17,7 @@ class EngineConfigTest {
         assertEquals(1280, config.windowWidth());
         assertEquals(720, config.windowHeight());
         assertEquals("Make-A-Saying", config.windowTitle());
+        assertEquals("#000000", config.borderColor());
         assertTrue(config.vsync());
         assertEquals(60, config.targetFps());
         assertEquals(4.5f, config.cmPerPixel(), 0.001f);

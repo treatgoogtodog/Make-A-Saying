@@ -23,4 +23,13 @@ class ArchitectureDependencyTest {
             Class.forName("com.makeasaying.editor.cut.CutsceneEditorModule", false, classLoader)
         );
     }
+
+    @Test
+    void engineMustNeverDependOnDataModule() {
+        // Enforce DEC-002: engine defines runtime types and never reads files; data depends on engine.
+        ClassLoader classLoader = getClass().getClassLoader();
+        assertThrows(ClassNotFoundException.class, () ->
+            Class.forName("com.makeasaying.data.config.ConfigLoader", false, classLoader)
+        );
+    }
 }

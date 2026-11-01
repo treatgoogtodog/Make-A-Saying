@@ -6,6 +6,7 @@
   "windowWidth": 1280,
   "windowHeight": 720,
   "windowTitle": "Make-A-Saying",
+  "borderColor": "#000000",
   "vsync": true,
   "targetFps": 60,
   "cmPerPixel": 4.5,

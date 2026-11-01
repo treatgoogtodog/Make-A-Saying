@@ -58,13 +58,18 @@ subprojects {
     }
 }
 
-// Architectural rule enforcement: :engine must never depend on any editor module
+// Architectural rule enforcement: :engine must never depend on any editor module or :data module (DEC-002)
 project(':engine') {
     afterEvaluate {
         configurations.all { conf ->
             conf.dependencies.all { dep ->
-                if (dep instanceof ProjectDependency && dep.name.startsWith('editor')) {
-                    throw new GradleException("Architectural violation: :engine must not depend on ${dep.name}")
+                if (dep instanceof ProjectDependency) {
+                    if (dep.name.startsWith('editor')) {
+                        throw new GradleException("Architectural violation: :engine must not depend on editor module: ${dep.name}");
+                    }
+                    if (dep.name == 'data') {
+                        throw new GradleException("Architectural violation (DEC-002): :engine must not depend on :data module");
+                    }
                 }
             }
         }
