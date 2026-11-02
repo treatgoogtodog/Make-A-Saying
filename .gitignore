@@ -22,3 +22,6 @@ logs/
 .makeasaying/
 imgui.ini
 *.ini
+
+# Java binaries
+*.class

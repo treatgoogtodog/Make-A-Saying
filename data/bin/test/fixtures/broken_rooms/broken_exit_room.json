@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "id": "broken_exit_room",
+  "width": 20,
+  "height": 12,
+  "tilesets": [
+    {
+      "alias": "a",
+      "id": "test_area"
+    }
+  ],
+  "layers": {
+    "main": [
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      "a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01"
+    ]
+  },
+  "spawnPoints": [
+    {
+      "id": "spawn_start",
+      "x": 32,
+      "y": 16
+    }
+  ],
+  "entities": [],
+  "exits": [
+    {
+      "id": "exit_broken",
+      "x": 280,
+      "y": 16,
+      "width": 24,
+      "height": 48,
+      "targetRoom": "nonexistent_room",
+      "targetSpawn": "nonexistent_spawn"
+    }
+  ]
+}
