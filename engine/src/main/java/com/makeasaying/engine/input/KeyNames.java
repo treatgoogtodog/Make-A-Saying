@@ -11,6 +11,11 @@ import java.util.Map;
  * Uses stable string names (e.g. "KEY_W", "KEY_ESCAPE") rather than raw integers.
  */
 public final class KeyNames {
+    public static final int MOD_NONE = 0;
+    public static final int MOD_CTRL = 1;
+    public static final int MOD_SHIFT = 2;
+    public static final int MOD_ALT = 4;
+
     private static final Map<String, Integer> NAME_TO_CODE = new HashMap<>();
     private static final Map<Integer, String> CODE_TO_NAME = new HashMap<>();
 
@@ -90,19 +95,71 @@ public final class KeyNames {
     private KeyNames() {}
 
     public static boolean isValidKeyName(String name) {
-        return name != null && NAME_TO_CODE.containsKey(name);
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        if (NAME_TO_CODE.containsKey(name)) {
+            return true;
+        }
+        if (name.contains("+")) {
+            String[] parts = name.split("\\+");
+            if (parts.length < 2) return false;
+            for (int i = 0; i < parts.length - 1; i++) {
+                String mod = parts[i].trim().toUpperCase(java.util.Locale.ROOT);
+                if (!mod.equals("CTRL") && !mod.equals("CONTROL") && !mod.equals("SHIFT") && !mod.equals("ALT")) {
+                    return false;
+                }
+            }
+            String baseKey = parts[parts.length - 1].trim();
+            return NAME_TO_CODE.containsKey(baseKey);
+        }
+        return false;
     }
 
     public static int toKeyCode(String name) {
-        Integer code = NAME_TO_CODE.get(name);
-        if (code == null) {
-            throw new IllegalArgumentException("Unknown key name: " + name);
+        if (name == null) {
+            throw new IllegalArgumentException("Key name cannot be null");
         }
-        return code;
+        if (NAME_TO_CODE.containsKey(name)) {
+            return NAME_TO_CODE.get(name);
+        }
+        if (name.contains("+")) {
+            String[] parts = name.split("\\+");
+            int modMask = 0;
+            for (int i = 0; i < parts.length - 1; i++) {
+                String mod = parts[i].trim().toUpperCase(java.util.Locale.ROOT);
+                if (mod.equals("CTRL") || mod.equals("CONTROL")) {
+                    modMask |= MOD_CTRL;
+                } else if (mod.equals("SHIFT")) {
+                    modMask |= MOD_SHIFT;
+                } else if (mod.equals("ALT")) {
+                    modMask |= MOD_ALT;
+                } else {
+                    throw new IllegalArgumentException("Unknown modifier: " + parts[i] + " in " + name);
+                }
+            }
+            String baseKey = parts[parts.length - 1].trim();
+            Integer baseCode = NAME_TO_CODE.get(baseKey);
+            if (baseCode == null) {
+                throw new IllegalArgumentException("Unknown base key name: " + baseKey + " in " + name);
+            }
+            return (modMask << 16) | baseCode;
+        }
+        throw new IllegalArgumentException("Unknown key name: " + name);
     }
 
     public static String toKeyName(int keyCode) {
-        return CODE_TO_NAME.getOrDefault(keyCode, "UNKNOWN_KEY_" + keyCode);
+        int modMask = (keyCode >> 16) & 0xFFFF;
+        int baseCode = keyCode & 0xFFFF;
+        if (modMask == 0) {
+            return CODE_TO_NAME.getOrDefault(baseCode, "UNKNOWN_KEY_" + baseCode);
+        }
+        StringBuilder sb = new StringBuilder();
+        if ((modMask & MOD_CTRL) != 0) sb.append("CTRL+");
+        if ((modMask & MOD_SHIFT) != 0) sb.append("SHIFT+");
+        if ((modMask & MOD_ALT) != 0) sb.append("ALT+");
+        sb.append(CODE_TO_NAME.getOrDefault(baseCode, "UNKNOWN_KEY_" + baseCode));
+        return sb.toString();
     }
 
     public static Map<String, Integer> getAllKnownKeys() {

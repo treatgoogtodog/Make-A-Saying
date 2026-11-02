@@ -27,6 +27,8 @@ class InputManagerTest {
         registry.register(ActionDefinition.button("move_right"));
         registry.register(ActionDefinition.button("jump"));
         registry.register(ActionDefinition.button("interact"));
+        registry.register(ActionDefinition.button("editor_undo"));
+        registry.register(ActionDefinition.button("editor_redo"));
         registry.register(ActionDefinition.button("cancel", true));
         registry.register(ActionDefinition.button("pause", true));
         registry.register(ActionDefinition.axis("move_x", "move_left", "move_right"));
@@ -157,6 +159,54 @@ class InputManagerTest {
         inputManager.tick(4L, true);
         assertTrue(inputManager.getState().isDown("jump"));
         assertTrue(inputManager.getState().isPressed("jump"));
+    }
+
+    @Test
+    void testCtrlZModifierChordAndImGuiCapturePreemption() {
+        registry.register(ActionDefinition.button("editor_undo"));
+        int ctrlZ = (KeyNames.MOD_CTRL << 16) | Input.Keys.Z;
+        bindings.bind(InputContext.EDITOR, "editor_undo", ctrlZ);
+
+        contextStack.push(InputContext.EDITOR);
+        assertEquals(InputContext.EDITOR, contextStack.getActiveContext());
+
+        // 1. When ImGui text field has focus (wantsKeyboard = true), Ctrl+Z is captured and does NOT trigger editor_undo
+        inputManager.setCaptureSource(new InputCaptureSource() {
+            @Override
+            public boolean wantsKeyboard() {
+                return true;
+            }
+
+            @Override
+            public boolean wantsMouse() {
+                return false;
+            }
+        });
+
+        inputManager.keyDown(Input.Keys.CONTROL_LEFT);
+        inputManager.tick(1L, true);
+
+        inputManager.keyDown(Input.Keys.Z);
+        inputManager.tick(2L, true);
+        assertFalse(inputManager.getState().isDown("editor_undo"), "When ImGui captures keyboard, Ctrl+Z must not trigger editor_undo");
+
+        inputManager.keyUp(Input.Keys.Z);
+        inputManager.tick(3L, true);
+
+        // 2. When ImGui is not capturing keyboard (wantsKeyboard = false), Ctrl+Z triggers editor_undo
+        inputManager.setCaptureSource(InputCaptureSource.none());
+        inputManager.keyDown(Input.Keys.CONTROL_LEFT);
+        inputManager.keyDown(Input.Keys.Z);
+        inputManager.tick(4L, true);
+        assertTrue(inputManager.getState().isDown("editor_undo"), "Ctrl+Z must trigger editor_undo when ImGui is not capturing keyboard");
+        assertTrue(inputManager.getState().isPressed("editor_undo"));
+
+        // 3. Releasing Z releases editor_undo
+        inputManager.keyUp(Input.Keys.Z);
+        inputManager.keyUp(Input.Keys.CONTROL_LEFT);
+        inputManager.tick(5L, true);
+        assertFalse(inputManager.getState().isDown("editor_undo"));
+        assertTrue(inputManager.getState().isReleased("editor_undo"));
     }
 
     @Test

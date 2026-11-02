@@ -241,4 +241,27 @@ class RoomValidatorTest {
         System.out.println("---------------------------------------------------");
         assertFalse(findings.isEmpty());
     }
+
+    @Test
+    void testLegacyPlatformCoordinatesError() {
+        RoomLoader.RoomData base = createValidRoomData(20, 10);
+        List<RoomLoader.EntityInstanceData> entities = List.of(
+            new RoomLoader.EntityInstanceData("platform_1", "moving_platform", 32, 32, Map.of(
+                "platform", Map.of("startX", 32, "startY", 32, "endX", 96, "endY", 32)
+            ))
+        );
+        RoomLoader.RoomData data = new RoomLoader.RoomData(
+            3, "room_legacy_plat", 20, 10, 5, base.tilesets(), base.layers(), base.spawnPoints(), entities, Collections.emptyList()
+        );
+        com.makeasaying.engine.schema.ComponentSchemaRegistry schemaRegistry = com.makeasaying.engine.schema.ComponentSchemaRegistry.createDefault();
+        com.makeasaying.engine.entity.EntityDefinition platDef = new com.makeasaying.engine.entity.EntityDefinition(
+            1, "moving_platform", List.of(), "#FFFFFF", true, Map.of()
+        );
+        Map<String, com.makeasaying.engine.entity.EntityDefinition> defs = Map.of("moving_platform", platDef);
+
+        List<ValidationFinding> findings = validator.validate(data, loadedTilesets, defs, schemaRegistry);
+
+        assertTrue(findings.stream().anyMatch(f -> "ROOM_ERR_LEGACY_PLATFORM_COORDINATES".equals(f.code())),
+            "Expected ROOM_ERR_LEGACY_PLATFORM_COORDINATES error for legacy start/end coordinates");
+    }
 }

@@ -61,6 +61,17 @@ public final class EntityEventQueue {
         count++;
     }
 
+    public synchronized void emitFlagChanged(int flagIndex, int oldValue, int newValue) {
+        if (count >= capacity) {
+            Log.error(LogCategory.ENTITY, "Event queue overflow! Dropping flag_changed for flag index %d", flagIndex);
+            return;
+        }
+
+        ringBuffer[tail].setFlagChanged(flagIndex, oldValue, newValue);
+        tail = (tail + 1) % capacity;
+        count++;
+    }
+
     public synchronized void dispatch() {
         int cascadeCounter = 0;
 

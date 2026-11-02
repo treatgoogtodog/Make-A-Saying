@@ -31,7 +31,10 @@ public class RoomDocumentTest {
         String[] roomFiles = {"test_01.json", "test_02.json"};
         for (String file : roomFiles) {
             Path path = Path.of("content/rooms", file);
-            if (!Files.exists(path)) continue;
+            if (!Files.exists(path)) {
+                path = Path.of("../content/rooms", file);
+            }
+            assertTrue(Files.exists(path), "Authored room file must exist at path: " + path);
 
             Room originalRoom = RoomLoader.load(path);
             String originalJson = RoomWriter.toJson(originalRoom, 1);

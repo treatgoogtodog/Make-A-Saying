@@ -19,7 +19,7 @@ public class EditorValidatorPresenterTest {
         RoomDocument doc = new RoomDocument("valid_room", 10, 10);
 
         presenter.update(0, doc, Collections.emptyMap());
-        assertTrue(presenter.getAllFindings().isEmpty(), "Initially valid room must produce no findings");
+        assertTrue(presenter.getErrors().isEmpty(), "Initially valid room must produce no errors");
 
         // Frame 10: debounced, no re-evaluation
         doc.setId("invalid ID with spaces");

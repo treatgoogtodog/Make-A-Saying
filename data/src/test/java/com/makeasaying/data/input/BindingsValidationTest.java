@@ -22,6 +22,8 @@ class BindingsValidationTest {
         registry = new ActionRegistry();
         registry.register(ActionDefinition.button("jump"));
         registry.register(ActionDefinition.button("attack"));
+        registry.register(ActionDefinition.button("undo"));
+        registry.register(ActionDefinition.button("redo"));
         registry.register(ActionDefinition.button("cancel", true)); // reserved
         registry.register(ActionDefinition.button("pause", true));  // reserved
     }
@@ -40,11 +42,60 @@ class BindingsValidationTest {
         assertNotNull(loadedRegistry);
         assertTrue(loadedRegistry.contains("jump"));
         assertTrue(loadedRegistry.contains("move_x"));
+        assertTrue(loadedRegistry.contains("editor_undo"));
+        assertTrue(loadedRegistry.contains("editor_redo"));
 
         ContextBindings loadedBindings = BindingsLoader.load(bindingsPath, loadedRegistry);
         assertNotNull(loadedBindings);
         assertTrue(loadedBindings.hasBindingForAction("gameplay", "jump"));
         assertTrue(loadedBindings.hasBindingForAction("global", "pause"));
+        assertTrue(loadedBindings.hasBindingForAction("editor", "editor_undo"));
+        assertTrue(loadedBindings.hasBindingForAction("editor", "editor_redo"));
+    }
+
+    @Test
+    void testModifierChordBindingsAndDuplicateConflict() throws Exception {
+        registry.register(ActionDefinition.button("undo"));
+        registry.register(ActionDefinition.button("redo"));
+
+        String validJson = """
+        {
+          "version": 1,
+          "contexts": {
+            "editor": {
+              "undo": ["CTRL+KEY_Z"],
+              "redo": ["CTRL+KEY_Y"]
+            },
+            "global": {
+              "pause": ["KEY_ESCAPE"],
+              "cancel": ["KEY_BACKSPACE"]
+            }
+          }
+        }
+        """;
+        ContextBindings bindings = BindingsLoader.parse(MAPPER.readTree(validJson), registry, "test-valid-chords");
+        assertNotNull(bindings);
+        assertTrue(bindings.hasBindingForAction("editor", "undo"));
+        assertTrue(bindings.hasBindingForAction("editor", "redo"));
+
+        String conflictJson = """
+        {
+          "version": 1,
+          "contexts": {
+            "editor": {
+              "undo": ["CTRL+KEY_Z"],
+              "redo": ["CTRL+KEY_Z"]
+            },
+            "global": {
+              "pause": ["KEY_ESCAPE"],
+              "cancel": ["KEY_BACKSPACE"]
+            }
+          }
+        }
+        """;
+        assertThrows(IllegalStateException.class, () ->
+            BindingsLoader.parse(MAPPER.readTree(conflictJson), registry, "test-conflict")
+        );
     }
 
     @Test

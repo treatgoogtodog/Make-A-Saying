@@ -1,6 +1,10 @@
 package com.makeasaying.data.world;
 
+import com.makeasaying.engine.entity.EntityDefinition;
 import com.makeasaying.engine.entity.TileShape;
+import com.makeasaying.engine.schema.ComponentField;
+import com.makeasaying.engine.schema.ComponentSchema;
+import com.makeasaying.engine.schema.ComponentSchemaRegistry;
 import com.makeasaying.engine.world.Room;
 import com.makeasaying.engine.world.RoomEntityData;
 import com.makeasaying.engine.world.RoomLayer;
@@ -43,6 +47,26 @@ public final class RoomValidator {
     }
 
     public List<ValidationFinding> validate(RoomLoader.RoomData data, Map<String, Tileset> loadedTilesets) {
+        return validate(data, loadedTilesets, null, null);
+    }
+
+    public List<ValidationFinding> validate(
+        RoomLoader.RoomData data,
+        Map<String, Tileset> loadedTilesets,
+        Map<String, EntityDefinition> entityDefs,
+        ComponentSchemaRegistry schemaRegistry
+    ) {
+        return validate(data, loadedTilesets, entityDefs, schemaRegistry, null, null);
+    }
+
+    public List<ValidationFinding> validate(
+        RoomLoader.RoomData data,
+        Map<String, Tileset> loadedTilesets,
+        Map<String, EntityDefinition> entityDefs,
+        ComponentSchemaRegistry schemaRegistry,
+        com.makeasaying.engine.flags.FlagRegistry flagRegistry,
+        com.makeasaying.engine.condition.AtomRegistry atomRegistry
+    ) {
         List<ValidationFinding> findings = new ArrayList<>();
         String roomId = data.id();
 
@@ -229,20 +253,247 @@ public final class RoomValidator {
 
         // 6. Entity Instances Validation
         Set<String> seenEntityIds = new HashSet<>();
+        int roomPxW = data.width() * requiredTileSize;
+        int roomPxH = data.height() * requiredTileSize;
+        int savepointCount = 0;
+
         if (data.entities() != null) {
             for (RoomLoader.EntityInstanceData ed : data.entities()) {
                 String eId = ed.instanceId();
+                String loc = String.format("room %s, entity %s (%d, %d)", roomId, eId, ed.x(), ed.y());
+
                 if (eId == null || !ID_PATTERN.matcher(eId).matches()) {
-                    findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ERR_INVALID_ID",
-                        "room " + roomId + ", entity " + eId, "Invalid entity instanceId '" + eId + "': must match [a-z0-9_.]+"));
+                    findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_INVALID_ID",
+                        loc, "Invalid entity instanceId '" + eId + "': must match [a-z0-9_.]+"));
                 } else if (!seenEntityIds.add(eId)) {
-                    findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ERR_DUPLICATE_ENTITY_ID",
-                        "room " + roomId, "Duplicate entity instance ID '" + eId + "'"));
+                    findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_DUPLICATE_INSTANCE_ID",
+                        loc, "Duplicate entity instance ID '" + eId + "'"));
+                }
+
+                // Check suffix against entitySeq
+                if (eId != null) {
+                    int lastUnderscore = eId.lastIndexOf('_');
+                    if (lastUnderscore >= 0 && lastUnderscore < eId.length() - 1) {
+                        try {
+                            int suffix = Integer.parseInt(eId.substring(lastUnderscore + 1));
+                            if (suffix >= data.entitySeq()) {
+                                findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_ENTITY_SEQ_INVALID",
+                                    "room " + roomId,
+                                    String.format("entitySeq %d must be strictly greater than instanceId '%s' numeric suffix %d",
+                                        data.entitySeq(), eId, suffix)));
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+
+                // Out of bounds
+                if (ed.x() < 0 || ed.x() >= roomPxW || ed.y() < 0 || ed.y() >= roomPxH) {
+                    findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_ENTITY_OUT_OF_BOUNDS",
+                        loc, String.format("Entity instance '%s' at (%d, %d) is out of room bounds (0..%d, 0..%d)",
+                            eId, ed.x(), ed.y(), roomPxW - 1, roomPxH - 1)));
+                }
+
+                EntityDefinition def = (entityDefs != null && ed.definition() != null) ? entityDefs.get(ed.definition()) : null;
+                if (entityDefs != null) {
+                    if (def == null) {
+                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_UNKNOWN_DEF",
+                            loc, "Unknown entity definition '" + ed.definition() + "'"));
+                    } else if (!def.placeable()) {
+                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_NON_PLACEABLE_DEF",
+                            loc, "Entity definition '" + ed.definition() + "' is marked placeable: false"));
+                    }
+                }
+
+                // Overrides validation
+                if (ed.overrides() != null && schemaRegistry != null) {
+                    for (Map.Entry<String, Map<String, Object>> compEntry : ed.overrides().entrySet()) {
+                        String compId = compEntry.getKey();
+                        ComponentSchema schema = schemaRegistry.getSchema(compId);
+                        if (schema == null) {
+                            findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_UNKNOWN_COMPONENT",
+                                loc, "Unknown component '" + compId + "' in overrides"));
+                        } else {
+                            Map<String, Object> fieldOverrides = compEntry.getValue();
+                            if (fieldOverrides != null) {
+                                if (compId.equals("platform")) {
+                                    if (fieldOverrides.containsKey("startX") || fieldOverrides.containsKey("startY") ||
+                                        fieldOverrides.containsKey("endX") || fieldOverrides.containsKey("endY")) {
+                                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_LEGACY_PLATFORM_COORDINATES",
+                                            loc, "Entity overrides contain obsolete absolute coordinates (startX, startY, endX, endY); platform motion must use relative offsets travelX and travelY"));
+                                    }
+                                }
+                                for (Map.Entry<String, Object> fEntry : fieldOverrides.entrySet()) {
+                                    String fieldName = fEntry.getKey();
+                                    Object val = fEntry.getValue();
+                                    ComponentField field = schema.getField(fieldName);
+                                    if (field == null) {
+                                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_UNKNOWN_FIELD",
+                                            loc, "Unknown field '" + fieldName + "' for component '" + compId + "'"));
+                                    } else if (!field.overridable()) {
+                                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_NON_OVERRIDABLE_FIELD",
+                                            loc, "Field '" + fieldName + "' on component '" + compId + "' is not overridable"));
+                                    } else if (!field.isValidValue(val)) {
+                                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_OVERRIDE_OUT_OF_RANGE",
+                                            loc, String.format("Override value '%s' for field '%s' on component '%s' is out of range or invalid type",
+                                                val, fieldName, compId)));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Warnings: solid inside solid and platform crosses solid
+                if (def != null && layers != null && layers.containsKey("main") && loadedTilesets != null) {
+                    // Check solid overlap
+                    if (def.tags() != null && def.tags().contains("solid")) {
+                        int colW = 16, colH = 16, colOx = -8, colOy = 0;
+                        Map<String, Object> colMap = def.components().get("collider");
+                        if (colMap != null) {
+                            colW = ((Number) colMap.getOrDefault("width", 16)).intValue();
+                            colH = ((Number) colMap.getOrDefault("height", 16)).intValue();
+                            colOx = ((Number) colMap.getOrDefault("offsetX", -colW / 2)).intValue();
+                            colOy = ((Number) colMap.getOrDefault("offsetY", 0)).intValue();
+                        }
+                        if (ed.overrides() != null && ed.overrides().containsKey("collider")) {
+                            Map<String, Object> ovrCol = ed.overrides().get("collider");
+                            if (ovrCol.containsKey("width")) colW = ((Number) ovrCol.get("width")).intValue();
+                            if (ovrCol.containsKey("height")) colH = ((Number) ovrCol.get("height")).intValue();
+                            if (ovrCol.containsKey("offsetX")) colOx = ((Number) ovrCol.get("offsetX")).intValue();
+                            if (ovrCol.containsKey("offsetY")) colOy = ((Number) ovrCol.get("offsetY")).intValue();
+                        }
+                        if (isSolidAtBox(ed.x() + colOx, ed.y() + colOy, colW, colH, data, layers.get("main"), loadedTilesets)) {
+                            findings.add(new ValidationFinding(ValidationSeverity.WARNING, "ROOM_WARN_SOLID_INSIDE_SOLID",
+                                loc, "Entity '" + eId + "' solid collider overlaps solid tile terrain"));
+                        }
+                    }
+
+                    // Check savepoint
+                    if (def.components().containsKey("savepoint") || (def.tags() != null && def.tags().contains("savepoint"))) {
+                        savepointCount++;
+                        int colW = 16, colH = 24, colOx = -8, colOy = 0;
+                        Map<String, Object> colMap = def.components().get("collider");
+                        if (colMap != null) {
+                            colW = ((Number) colMap.getOrDefault("width", 16)).intValue();
+                            colH = ((Number) colMap.getOrDefault("height", 24)).intValue();
+                            colOx = ((Number) colMap.getOrDefault("offsetX", -colW / 2)).intValue();
+                            colOy = ((Number) colMap.getOrDefault("offsetY", 0)).intValue();
+                        }
+                        if (isSolidAtBox(ed.x() + colOx, ed.y() + colOy, colW, colH, data, layers.get("main"), loadedTilesets)) {
+                            findings.add(new ValidationFinding(ValidationSeverity.ERROR, "ROOM_ERR_SAVEPOINT_INSIDE_SOLID",
+                                loc, "Savepoint '" + eId + "' trigger box overlaps solid tile terrain"));
+                        }
+                    }
+
+                    // Check platform trajectory
+                    if (def.components().containsKey("platform")) {
+                        int tx = 0, ty = 0;
+                        Map<String, Object> platMap = def.components().get("platform");
+                        if (platMap != null) {
+                            tx = ((Number) platMap.getOrDefault("travelX", 0)).intValue();
+                            ty = ((Number) platMap.getOrDefault("travelY", 0)).intValue();
+                        }
+                        if (ed.overrides() != null && ed.overrides().containsKey("platform")) {
+                            Map<String, Object> ovrPlat = ed.overrides().get("platform");
+                            if (ovrPlat.containsKey("travelX")) tx = ((Number) ovrPlat.get("travelX")).intValue();
+                            if (ovrPlat.containsKey("travelY")) ty = ((Number) ovrPlat.get("travelY")).intValue();
+                        }
+                        int endX = ed.x() + tx;
+                        int endY = ed.y() + ty;
+                        if (endX < 0 || endX >= roomPxW || endY < 0 || endY >= roomPxH ||
+                            isSolidAtPoint(endX, endY, data, layers.get("main"), loadedTilesets)) {
+                            findings.add(new ValidationFinding(ValidationSeverity.WARNING, "ROOM_WARN_PLATFORM_CROSSES_SOLID",
+                                loc, "Platform '" + eId + "' travel trajectory leaves room bounds or intersects solid tiles"));
+                        }
+                    }
+                }
+                // Condition validation for entity
+                if (ed.spawnCondition() != null && flagRegistry != null) {
+                    try {
+                        com.makeasaying.data.condition.ConditionLoader.parse(
+                            ed.spawnCondition(), flagRegistry, atomRegistry != null ? atomRegistry : new com.makeasaying.engine.condition.AtomRegistry());
+                    } catch (IllegalArgumentException e) {
+                        String msg = e.getMessage();
+                        String code = "COND_ERR_INVALID_CONDITION";
+                        if (msg != null && msg.contains(":")) {
+                            String[] parts = msg.split(":", 2);
+                            code = parts[0].trim();
+                            msg = parts[1].trim();
+                        }
+                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, code, loc, msg));
+                    }
+                }
+            }
+        }
+
+        if (savepointCount == 0) {
+            findings.add(new ValidationFinding(ValidationSeverity.INFO, "ROOM_INFO_NO_SAVEPOINT",
+                "room " + roomId, "Room has no savepoint entity"));
+        }
+
+        // 7. Exits validation
+        if (data.exits() != null) {
+            for (RoomLoader.RoomExitData exit : data.exits()) {
+                String exLoc = "room " + roomId + ", exit " + exit.id();
+                if (exit.condition() != null && flagRegistry != null) {
+                    try {
+                        com.makeasaying.data.condition.ConditionLoader.parse(
+                            exit.condition(), flagRegistry, atomRegistry != null ? atomRegistry : new com.makeasaying.engine.condition.AtomRegistry());
+                    } catch (IllegalArgumentException e) {
+                        String msg = e.getMessage();
+                        String code = "COND_ERR_INVALID_CONDITION";
+                        if (msg != null && msg.contains(":")) {
+                            String[] parts = msg.split(":", 2);
+                            code = parts[0].trim();
+                            msg = parts[1].trim();
+                        }
+                        findings.add(new ValidationFinding(ValidationSeverity.ERROR, code, exLoc, msg));
+                    }
                 }
             }
         }
 
         return findings;
+    }
+
+    private static boolean isSolidAtPoint(int px, int py, RoomLoader.RoomData data, List<String> mainRows, Map<String, Tileset> loadedTilesets) {
+        if (mainRows == null || data == null) return false;
+        int tileX = px / 16;
+        int tileY = py / 16;
+        int jsonRow = data.height() - 1 - tileY;
+        if (jsonRow < 0 || jsonRow >= mainRows.size()) return false;
+        String rowStr = mainRows.get(jsonRow);
+        String[] tokens = (rowStr != null && !rowStr.trim().isEmpty()) ? rowStr.trim().split("\\s+") : new String[0];
+        if (tileX < 0 || tileX >= tokens.length) return false;
+        String token = tokens[tileX];
+        if (".".equals(token)) return false;
+        String[] parts = token.split(":", 2);
+        if (parts.length == 2) {
+            String alias = parts[0];
+            String tileId = parts[1];
+            String targetTsId = findTilesetId(data.tilesets(), alias);
+            if (targetTsId != null && loadedTilesets.containsKey(targetTsId)) {
+                Tileset ts = loadedTilesets.get(targetTsId);
+                TileDef def = (ts != null) ? ts.getTile(tileId) : null;
+                return def != null && def.shape() == TileShape.SOLID;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isSolidAtBox(int x, int y, int w, int h, RoomLoader.RoomData data, List<String> mainRows, Map<String, Tileset> loadedTilesets) {
+        int minTileX = x / 16;
+        int maxTileX = (x + w - 1) / 16;
+        int minTileY = y / 16;
+        int maxTileY = (y + h - 1) / 16;
+        for (int ty = minTileY; ty <= maxTileY; ty++) {
+            for (int tx = minTileX; tx <= maxTileX; tx++) {
+                if (isSolidAtPoint(tx * 16 + 8, ty * 16 + 8, data, mainRows, loadedTilesets)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static String findTilesetId(List<RoomLoader.TilesetAliasData> aliases, String alias) {

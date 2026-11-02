@@ -65,11 +65,27 @@
       "reserved": true
     },
     {
+      "id": "debug_flags",
+      "type": "button"
+    },
+    {
+      "id": "debug_load_checkpoint",
+      "type": "button"
+    },
+    {
       "id": "editor_play",
       "type": "button"
     },
     {
       "id": "editor_stop",
+      "type": "button"
+    },
+    {
+      "id": "editor_undo",
+      "type": "button"
+    },
+    {
+      "id": "editor_redo",
       "type": "button"
     }
   ]

@@ -13,11 +13,50 @@ public final class Room {
     private final String id;
     private final int width;
     private final int height;
+    private final int entitySeq;
     private final Map<String, String> tilesetAliases;
     private final Map<RoomLayerType, RoomLayer> layers;
     private final List<SpawnPoint> spawnPoints;
     private final List<RoomEntityData> entities;
     private final List<RoomExit> exits;
+
+    public Room(
+        String id,
+        int width,
+        int height,
+        int entitySeq,
+        Map<String, String> tilesetAliases,
+        Map<RoomLayerType, RoomLayer> layers,
+        List<SpawnPoint> spawnPoints,
+        List<RoomEntityData> entities,
+        List<RoomExit> exits
+    ) {
+        if (id == null || id.isBlank()) throw new IllegalArgumentException("Room id must not be blank");
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("Room dimensions must be positive");
+
+        this.id = id;
+        this.width = width;
+        this.height = height;
+        this.entitySeq = entitySeq > 0 ? entitySeq : computeDefaultEntitySeq(entities);
+        this.tilesetAliases = (tilesetAliases != null) ? Collections.unmodifiableMap(new LinkedHashMap<>(tilesetAliases)) : Collections.emptyMap();
+        this.layers = (layers != null) ? Collections.unmodifiableMap(new LinkedHashMap<>(layers)) : Collections.emptyMap();
+        this.spawnPoints = (spawnPoints != null) ? List.copyOf(spawnPoints) : Collections.emptyList();
+        this.entities = (entities != null) ? List.copyOf(entities) : Collections.emptyList();
+        this.exits = (exits != null) ? List.copyOf(exits) : Collections.emptyList();
+    }
+
+    public Room(
+        String id,
+        int width,
+        int height,
+        Map<String, String> tilesetAliases,
+        Map<RoomLayerType, RoomLayer> layers,
+        List<SpawnPoint> spawnPoints,
+        List<RoomEntityData> entities,
+        List<RoomExit> exits
+    ) {
+        this(id, width, height, computeDefaultEntitySeq(entities), tilesetAliases, layers, spawnPoints, entities, exits);
+    }
 
     public Room(
         String id,
@@ -31,27 +70,21 @@ public final class Room {
         this(id, width, height, tilesetAliases, layers, spawnPoints, entities, Collections.emptyList());
     }
 
-    public Room(
-        String id,
-        int width,
-        int height,
-        Map<String, String> tilesetAliases,
-        Map<RoomLayerType, RoomLayer> layers,
-        List<SpawnPoint> spawnPoints,
-        List<RoomEntityData> entities,
-        List<RoomExit> exits
-    ) {
-        if (id == null || id.isBlank()) throw new IllegalArgumentException("Room id must not be blank");
-        if (width <= 0 || height <= 0) throw new IllegalArgumentException("Room dimensions must be positive");
-
-        this.id = id;
-        this.width = width;
-        this.height = height;
-        this.tilesetAliases = (tilesetAliases != null) ? Collections.unmodifiableMap(new LinkedHashMap<>(tilesetAliases)) : Collections.emptyMap();
-        this.layers = (layers != null) ? Collections.unmodifiableMap(new LinkedHashMap<>(layers)) : Collections.emptyMap();
-        this.spawnPoints = (spawnPoints != null) ? List.copyOf(spawnPoints) : Collections.emptyList();
-        this.entities = (entities != null) ? List.copyOf(entities) : Collections.emptyList();
-        this.exits = (exits != null) ? List.copyOf(exits) : Collections.emptyList();
+    private static int computeDefaultEntitySeq(List<RoomEntityData> entities) {
+        int max = 0;
+        if (entities != null) {
+            for (RoomEntityData ed : entities) {
+                String iid = ed.instanceId();
+                int idx = iid.lastIndexOf('_');
+                if (idx >= 0 && idx < iid.length() - 1) {
+                    try {
+                        int val = Integer.parseInt(iid.substring(idx + 1));
+                        if (val > max) max = val;
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+        }
+        return max + 1;
     }
 
     public String id() {
@@ -64,6 +97,10 @@ public final class Room {
 
     public int height() {
         return height;
+    }
+
+    public int entitySeq() {
+        return entitySeq;
     }
 
     public Map<String, String> tilesetAliases() {

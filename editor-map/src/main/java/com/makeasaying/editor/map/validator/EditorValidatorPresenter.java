@@ -49,13 +49,25 @@ public final class EditorValidatorPresenter {
     }
 
     public void update(long frameCount, RoomDocument doc, Map<String, Tileset> tilesets) {
+        update(frameCount, doc, tilesets, null, null);
+    }
+
+    public void update(long frameCount, RoomDocument doc, Map<String, Tileset> tilesets,
+                       Map<String, com.makeasaying.engine.entity.EntityDefinition> defs,
+                       com.makeasaying.engine.schema.ComponentSchemaRegistry schemaRegistry) {
         if (lastValidatedFrame != -1 && (frameCount - lastValidatedFrame) < debounceInterval) {
             return;
         }
-        forceValidate(frameCount, doc, tilesets);
+        forceValidate(frameCount, doc, tilesets, defs, schemaRegistry);
     }
 
     public void forceValidate(long frameCount, RoomDocument doc, Map<String, Tileset> tilesets) {
+        forceValidate(frameCount, doc, tilesets, null, null);
+    }
+
+    public void forceValidate(long frameCount, RoomDocument doc, Map<String, Tileset> tilesets,
+                              Map<String, com.makeasaying.engine.entity.EntityDefinition> defs,
+                              com.makeasaying.engine.schema.ComponentSchemaRegistry schemaRegistry) {
         if (doc == null) {
             cachedFindings = Collections.emptyList();
             errors.clear();
@@ -66,7 +78,7 @@ public final class EditorValidatorPresenter {
         }
 
         RoomLoader.RoomData data = RoomLoader.toData(doc.toRoom(), RoomLoader.CURRENT_VERSION);
-        cachedFindings = validator.validate(data, tilesets);
+        cachedFindings = validator.validate(data, tilesets, defs, schemaRegistry);
 
         errors.clear();
         warnings.clear();
@@ -120,8 +132,8 @@ public final class EditorValidatorPresenter {
         if (matcher.find()) {
             int x = Integer.parseInt(matcher.group(1));
             int y = Integer.parseInt(matcher.group(2));
-            if (loc.contains("spawn")) {
-                // Spawn locations are in world pixel coordinates (16 px per tile)
+            if (loc.contains("spawn") || loc.contains("entity")) {
+                // Spawn and entity locations are in world pixel coordinates (16 px per tile)
                 return new LocationTarget(x / 16, y / 16, layer);
             }
             return new LocationTarget(x, y, layer);

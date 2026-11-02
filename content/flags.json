@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "flags": {
+    "test.stage": {
+      "type": "int",
+      "scope": "global",
+      "default": 0,
+      "min": 0,
+      "max": 10,
+      "doc": "Global game progression stage counter"
+    },
+    "test.door_open": {
+      "type": "bool",
+      "scope": "room",
+      "default": false,
+      "doc": "Room-scoped door and conditional platform unlock flag"
+    },
+    "test.lever_state": {
+      "type": "enum",
+      "scope": "session",
+      "default": "off",
+      "values": [
+        "off",
+        "half",
+        "on"
+      ],
+      "doc": "Session puzzle lever tri-state position"
+    },
+    "test.temp_barrier": {
+      "type": "bool",
+      "scope": "room_temp",
+      "default": true,
+      "doc": "Temporary room hazard barrier cleared on room swap"
+    },
+    "test.unread_flag": {
+      "type": "bool",
+      "scope": "global",
+      "default": false,
+      "doc": "Flag declared but not read by any room condition"
+    }
+  }
+}

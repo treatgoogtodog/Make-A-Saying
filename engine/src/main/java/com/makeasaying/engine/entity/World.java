@@ -27,6 +27,8 @@ public final class World {
     private final JumpStateComponent[] jumpStates = new JumpStateComponent[MAX_ENTITIES];
     private final com.makeasaying.engine.entity.components.PlatformComponent[] platforms = new com.makeasaying.engine.entity.components.PlatformComponent[MAX_ENTITIES];
     private final com.makeasaying.engine.entity.components.RoomScopeComponent[] roomScopes = new com.makeasaying.engine.entity.components.RoomScopeComponent[MAX_ENTITIES];
+    private final com.makeasaying.engine.entity.components.SavepointComponent[] savepoints = new com.makeasaying.engine.entity.components.SavepointComponent[MAX_ENTITIES];
+    private final String[] instanceIds = new String[MAX_ENTITIES];
 
     private final EntityEventQueue eventQueue;
     private final int[] freeIndices = new int[MAX_ENTITIES];
@@ -64,6 +66,7 @@ public final class World {
             jumpStates[i] = null;
             platforms[i] = null;
             roomScopes[i] = null;
+            instanceIds[i] = null;
         }
 
         // Push free indices in reverse order so lowest index (1) is popped first
@@ -118,6 +121,8 @@ public final class World {
                 jumpStates[index] = null;
                 platforms[index] = null;
                 roomScopes[index] = null;
+                savepoints[index] = null;
+                instanceIds[index] = null;
                 freeIndices[freeCount++] = index;
             }
         }
@@ -203,6 +208,29 @@ public final class World {
 
     public com.makeasaying.engine.entity.components.RoomScopeComponent getRoomScope(long id) {
         return isAlive(id) ? roomScopes[EntityId.getIndex(id)] : null;
+    }
+
+    public void setSavepoint(long id, com.makeasaying.engine.entity.components.SavepointComponent savepoint) {
+        if (isAlive(id)) savepoints[EntityId.getIndex(id)] = savepoint;
+    }
+
+    public com.makeasaying.engine.entity.components.SavepointComponent getSavepoint(long id) {
+        return isAlive(id) ? savepoints[EntityId.getIndex(id)] : null;
+    }
+
+    public com.makeasaying.engine.entity.components.SavepointComponent getSavepointByIndex(int index) {
+        return savepoints[index];
+    }
+
+    public long findPlayerEntity() {
+        for (int i = 1; i < MAX_ENTITIES; i++) {
+            if (!alive[i]) continue;
+            ControllerComponent ctrl = controllers[i];
+            if (ctrl != null && ctrl.source == ControlSource.PLAYER) {
+                return getIdByIndex(i);
+            }
+        }
+        return EntityId.NULL_ID;
     }
 
     // Fast indexed access for systems (iteration by index 1..MAX_ENTITIES)
@@ -320,6 +348,18 @@ public final class World {
                 h ^= rs.scope.ordinal();
                 h *= 1099511628211L;
             }
+
+            String iid = instanceIds[i];
+            if (iid != null) {
+                h ^= iid.hashCode();
+                h *= 1099511628211L;
+            }
+
+            com.makeasaying.engine.entity.components.SavepointComponent sp = savepoints[i];
+            if (sp != null) {
+                h ^= (sp.active ? 1 : 0);
+                h *= 1099511628211L;
+            }
         }
         return h;
     }
@@ -343,6 +383,9 @@ public final class World {
         JumpStateComponent[] snapJumpStates = new JumpStateComponent[MAX_ENTITIES];
         com.makeasaying.engine.entity.components.PlatformComponent[] snapPlatforms = new com.makeasaying.engine.entity.components.PlatformComponent[MAX_ENTITIES];
         com.makeasaying.engine.entity.components.RoomScopeComponent[] snapRoomScopes = new com.makeasaying.engine.entity.components.RoomScopeComponent[MAX_ENTITIES];
+        com.makeasaying.engine.entity.components.SavepointComponent[] snapSavepoints = new com.makeasaying.engine.entity.components.SavepointComponent[MAX_ENTITIES];
+        String[] snapInstanceIds = new String[MAX_ENTITIES];
+        System.arraycopy(this.instanceIds, 0, snapInstanceIds, 0, MAX_ENTITIES);
 
         for (int i = 1; i < MAX_ENTITIES; i++) {
             if (!alive[i]) continue;
@@ -419,13 +462,18 @@ public final class World {
             if (rs != null) {
                 snapRoomScopes[i] = new com.makeasaying.engine.entity.components.RoomScopeComponent(rs.scope);
             }
+
+            com.makeasaying.engine.entity.components.SavepointComponent sp = savepoints[i];
+            if (sp != null) {
+                snapSavepoints[i] = new com.makeasaying.engine.entity.components.SavepointComponent(sp.active);
+            }
         }
 
         return new WorldSnapshot(
             snapGenerations, snapAlive, snapFreeIndices, snapFreeCount,
             snapDefSpawns, snapDefSpawnsCount, snapDefDespawns, snapDefDespawnsCount,
             snapBodies, snapColliders, snapFacings, snapControllers, snapInputStates,
-            snapJumpStates, snapPlatforms, snapRoomScopes
+            snapJumpStates, snapPlatforms, snapRoomScopes, snapSavepoints, snapInstanceIds
         );
     }
 
@@ -454,6 +502,7 @@ public final class World {
                 jumpStates[i] = null;
                 platforms[i] = null;
                 roomScopes[i] = null;
+                instanceIds[i] = null;
                 continue;
             }
 
@@ -537,6 +586,48 @@ public final class World {
 
             com.makeasaying.engine.entity.components.RoomScopeComponent rs = snapshot.roomScopes[i];
             roomScopes[i] = rs != null ? new com.makeasaying.engine.entity.components.RoomScopeComponent(rs.scope) : null;
+
+            com.makeasaying.engine.entity.components.SavepointComponent sp = snapshot.savepoints != null ? snapshot.savepoints[i] : null;
+            savepoints[i] = sp != null ? new com.makeasaying.engine.entity.components.SavepointComponent(sp.active) : null;
+
+            instanceIds[i] = snapshot.instanceIds[i];
         }
+    }
+
+    public void setInstanceId(long entityId, String instanceId) {
+        int index = EntityId.getIndex(entityId);
+        if (index > 0 && index < MAX_ENTITIES && alive[index] && generations[index] == EntityId.getGeneration(entityId)) {
+            instanceIds[index] = instanceId;
+        }
+    }
+
+    public String getInstanceId(long entityId) {
+        int index = EntityId.getIndex(entityId);
+        if (index > 0 && index < MAX_ENTITIES && alive[index] && generations[index] == EntityId.getGeneration(entityId)) {
+            return instanceIds[index];
+        }
+        return null;
+    }
+
+    public String[] getInstanceIdsArray() {
+        return instanceIds;
+    }
+
+    public int getActiveCount() {
+        int count = 0;
+        for (int i = 1; i < MAX_ENTITIES; i++) {
+            if (alive[i]) count++;
+        }
+        return count;
+    }
+
+    public Long findEntityByInstanceId(String instanceId) {
+        if (instanceId == null) return null;
+        for (int i = 1; i < MAX_ENTITIES; i++) {
+            if (alive[i] && instanceId.equals(instanceIds[i])) {
+                return EntityId.of(i, generations[i]);
+            }
+        }
+        return null;
     }
 }

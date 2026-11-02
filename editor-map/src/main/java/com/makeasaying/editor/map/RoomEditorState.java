@@ -8,9 +8,12 @@ import com.makeasaying.editor.map.hotreload.EditorHotReloadHandler;
 import com.makeasaying.editor.map.tools.EditorTool;
 import com.makeasaying.editor.map.tools.PencilTool;
 import com.makeasaying.editor.map.validator.EditorValidatorPresenter;
+import com.makeasaying.engine.entity.CompositeGameSnapshot;
 import com.makeasaying.engine.entity.World;
 import com.makeasaying.engine.entity.WorldSnapshot;
+import com.makeasaying.engine.flags.FlagStore;
 import com.makeasaying.engine.world.RoomLayerType;
+import com.makeasaying.engine.world.RoomStateStore;
 
 import java.nio.file.Path;
 
@@ -43,12 +46,20 @@ public final class RoomEditorState {
     private boolean isPlaying = false;
     private World playWorld;
     private WorldSnapshot playSnapshot;
+    private CompositeGameSnapshot compositePlaySnapshot;
+    private FlagStore flagStore;
+    private RoomStateStore roomStateStore;
     private long playPlayerId = 0L;
 
     // Sub-models
     private final NewRoomModel newRoomModel = new NewRoomModel();
     private final SaveConfirmModel saveConfirmModel = new SaveConfirmModel();
     private final EditorValidatorPresenter validatorPresenter = new EditorValidatorPresenter();
+    private final com.makeasaying.editor.map.model.SelectionModel selectionModel = new com.makeasaying.editor.map.model.SelectionModel();
+    private com.makeasaying.editor.map.model.EntityPaletteModel entityPaletteModel;
+    private com.makeasaying.engine.schema.ComponentSchemaRegistry schemaRegistry;
+    private java.util.Map<String, com.makeasaying.engine.entity.EntityDefinition> entityDefs = java.util.Collections.emptyMap();
+    private boolean entitySnapToGrid = true;
     private EditorHotReloadHandler hotReloadHandler;
 
     public RoomEditorState(RoomDocument initialDoc, Path initialPath) {
@@ -110,12 +121,39 @@ public final class RoomEditorState {
     public WorldSnapshot getPlaySnapshot() { return playSnapshot; }
     public void setPlaySnapshot(WorldSnapshot snapshot) { this.playSnapshot = snapshot; }
 
+    public CompositeGameSnapshot getCompositePlaySnapshot() { return compositePlaySnapshot; }
+    public void setCompositePlaySnapshot(CompositeGameSnapshot snapshot) { this.compositePlaySnapshot = snapshot; }
+
+    public FlagStore getFlagStore() { return flagStore; }
+    public RoomStateStore getRoomStateStore() { return roomStateStore; }
+    public void setFlagStore(FlagStore flagStore, RoomStateStore roomStateStore) {
+        this.flagStore = flagStore;
+        this.roomStateStore = roomStateStore;
+    }
+
     public long getPlayPlayerId() { return playPlayerId; }
     public void setPlayPlayerId(long id) { this.playPlayerId = id; }
 
     public NewRoomModel getNewRoomModel() { return newRoomModel; }
     public SaveConfirmModel getSaveConfirmModel() { return saveConfirmModel; }
     public EditorValidatorPresenter getValidatorPresenter() { return validatorPresenter; }
+
+    public com.makeasaying.editor.map.model.SelectionModel getSelectionModel() { return selectionModel; }
+    public com.makeasaying.editor.map.model.EntityPaletteModel getEntityPaletteModel() { return entityPaletteModel; }
+    public void setEntityPaletteModel(com.makeasaying.editor.map.model.EntityPaletteModel model) { this.entityPaletteModel = model; }
+
+    public com.makeasaying.engine.schema.ComponentSchemaRegistry getSchemaRegistry() { return schemaRegistry; }
+    public void setSchemaRegistry(com.makeasaying.engine.schema.ComponentSchemaRegistry reg) { this.schemaRegistry = reg; }
+
+    public java.util.Map<String, com.makeasaying.engine.entity.EntityDefinition> getEntityDefs() { return entityDefs; }
+    public void setEntityDefs(java.util.Map<String, com.makeasaying.engine.entity.EntityDefinition> defs) { this.entityDefs = defs != null ? defs : java.util.Collections.emptyMap(); }
+
+    public void setFlagStore(FlagStore flagStore) {
+        setFlagStore(flagStore, null);
+    }
+
+    public boolean isEntitySnapToGrid() { return entitySnapToGrid; }
+    public void setEntitySnapToGrid(boolean snap) { this.entitySnapToGrid = snap; }
 
     public EditorHotReloadHandler getHotReloadHandler() { return hotReloadHandler; }
     public void setHotReloadHandler(EditorHotReloadHandler handler) { this.hotReloadHandler = handler; }

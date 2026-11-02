@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class M5bAllocationTest {
@@ -35,6 +36,12 @@ class M5bAllocationTest {
         world.setBody(playerId, new BodyComponent(32, 16));
         world.setCollider(playerId, new ColliderComponent(12, 36));
         world.setRoomScope(playerId, new RoomScopeComponent(RoomScopeComponent.Scope.PERSISTENT_CARRIED));
+
+        // Add a moving platform so entities are present in world
+        long platId = world.createEntity();
+        world.setPlatform(platId, new com.makeasaying.engine.entity.components.PlatformComponent(
+            64, 32, 128, 32, 32, 8, 1.0f, 10, com.makeasaying.engine.entity.components.PlatformComponent.CrushMode.BLOCK));
+        world.setRoomScope(platId, new RoomScopeComponent(RoomScopeComponent.Scope.ROOM_LOCAL));
         world.applyDeferredLifecycle();
 
         Room room = new Room("room_01", 40, 12, Map.of(), Map.of(),
@@ -47,23 +54,34 @@ class M5bAllocationTest {
         java.util.function.BooleanSupplier alwaysReady = () -> true;
         RoomTransitionManager.SwapCallback noOpSwap = exit -> {};
 
-        // Warm up
-        for (int i = 0; i < 5000; i++) {
+        long threadId = Thread.currentThread().threadId();
+        sunThreadBean.getThreadAllocatedBytes(threadId); // Prime ThreadMXBean
+
+        // Warm up with at least 25k ticks to ensure full C2 compilation
+        for (int i = 0; i < 25000; i++) {
             transition.update(playerId, world, room, alwaysReady, noOpSwap);
         }
 
-        long threadId = Thread.currentThread().threadId();
-        long memBefore = sunThreadBean.getThreadAllocatedBytes(threadId);
-
+        // Window 1: 100k iterations
+        long memBefore1 = sunThreadBean.getThreadAllocatedBytes(threadId);
         for (int i = 0; i < ITERATIONS; i++) {
             transition.update(playerId, world, room, alwaysReady, noOpSwap);
         }
+        long memAfter1 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        long allocated1 = memAfter1 - memBefore1;
 
-        long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
-        long allocated = memAfter - memBefore;
-        System.out.println("Ordinary ticks allocated bytes over " + ITERATIONS + " iterations: " + allocated);
+        // Window 2: 100k iterations
+        long memBefore2 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        for (int i = 0; i < ITERATIONS; i++) {
+            transition.update(playerId, world, room, alwaysReady, noOpSwap);
+        }
+        long memAfter2 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        long allocated2 = memAfter2 - memBefore2;
 
-        assertTrue(allocated < 1024, "Ordinary ticks must have zero heap allocation (was " + allocated + " bytes)");
+        System.out.println("Ordinary ticks window 1 (100k): " + allocated1 + " bytes, window 2 (100k): " + allocated2 + " bytes");
+
+        assertEquals(0, allocated1, "Ordinary ticks window 1 must be strictly 0 bytes (was " + allocated1 + " bytes)");
+        assertEquals(0, allocated2, "Ordinary ticks window 2 must be strictly 0 bytes (was " + allocated2 + " bytes)");
     }
 
     @Test
@@ -87,7 +105,7 @@ class M5bAllocationTest {
         );
 
         // Huge transition duration so it stays in transition throughout iterations
-        RoomTransitionConfig config = new RoomTransitionConfig(ITERATIONS * 2, 4, 12);
+        RoomTransitionConfig config = new RoomTransitionConfig(ITERATIONS * 6, 4, 12);
         RoomTransitionManager transition = new RoomTransitionManager(config);
         RoomExit exit = new RoomExit("exit_1", 32, 16, 24, 48, "room_02", "s");
         transition.startTransition(exit);
@@ -95,25 +113,37 @@ class M5bAllocationTest {
         java.util.function.BooleanSupplier alwaysReady = () -> true;
         RoomTransitionManager.SwapCallback noOpSwap = ex -> {};
 
-        // Warm up
-        for (int i = 0; i < 5000; i++) {
+        long threadId = Thread.currentThread().threadId();
+        sunThreadBean.getThreadAllocatedBytes(threadId); // Prime ThreadMXBean
+
+        // Warm up with 300k ticks to ensure full C2 compilation and all tier transitions complete
+        for (int i = 0; i < 300000; i++) {
             transition.update(playerId, world, room, alwaysReady, noOpSwap);
             float alpha = transition.getFadeAlpha();
         }
 
-        long threadId = Thread.currentThread().threadId();
-        long memBefore = sunThreadBean.getThreadAllocatedBytes(threadId);
-
+        // Window 1: 100k iterations
+        long memBefore1 = sunThreadBean.getThreadAllocatedBytes(threadId);
         for (int i = 0; i < ITERATIONS; i++) {
             transition.update(playerId, world, room, alwaysReady, noOpSwap);
             float alpha = transition.getFadeAlpha();
         }
+        long memAfter1 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        long allocated1 = memAfter1 - memBefore1;
 
-        long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
-        long allocated = memAfter - memBefore;
-        System.out.println("Transition ticks allocated bytes over " + ITERATIONS + " iterations: " + allocated);
+        // Window 2: 100k iterations
+        long memBefore2 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        for (int i = 0; i < ITERATIONS; i++) {
+            transition.update(playerId, world, room, alwaysReady, noOpSwap);
+            float alpha = transition.getFadeAlpha();
+        }
+        long memAfter2 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        long allocated2 = memAfter2 - memBefore2;
 
-        assertTrue(allocated < 1024, "Fade ticks must have zero heap allocation (was " + allocated + " bytes)");
+        System.out.println("Transition ticks window 1 (100k): " + allocated1 + " bytes, window 2 (100k): " + allocated2 + " bytes");
+
+        assertEquals(0, allocated1, "Fade ticks window 1 must be strictly 0 bytes (was " + allocated1 + " bytes)");
+        assertEquals(0, allocated2, "Fade ticks window 2 must be strictly 0 bytes (was " + allocated2 + " bytes)");
     }
 
     @Test
@@ -137,7 +167,8 @@ class M5bAllocationTest {
         );
 
         RoomTransitionConfig config = new RoomTransitionConfig(0, 0, 12);
-        RoomTransitionManager transition = new RoomTransitionManager(config);
+        // Supply constant monotonic clock so timeout never fires during allocation loop
+        RoomTransitionManager transition = new RoomTransitionManager(config, () -> 1000L);
         RoomExit exit = new RoomExit("exit_1", 32, 16, 24, 48, "room_02", "s");
         transition.startTransition(exit);
 
@@ -147,22 +178,33 @@ class M5bAllocationTest {
         // Step into HOLD_WAIT_SWAP
         transition.update(playerId, world, room, notReady, noOpSwap);
 
-        // Warm up
-        for (int i = 0; i < 5000; i++) {
+        long threadId = Thread.currentThread().threadId();
+        sunThreadBean.getThreadAllocatedBytes(threadId); // Prime ThreadMXBean
+
+        // Warm up with 25k ticks
+        for (int i = 0; i < 25000; i++) {
             transition.update(playerId, world, room, notReady, noOpSwap);
         }
 
-        long threadId = Thread.currentThread().threadId();
-        long memBefore = sunThreadBean.getThreadAllocatedBytes(threadId);
-
+        // Window 1: 100k iterations
+        long memBefore1 = sunThreadBean.getThreadAllocatedBytes(threadId);
         for (int i = 0; i < ITERATIONS; i++) {
             transition.update(playerId, world, room, notReady, noOpSwap);
         }
+        long memAfter1 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        long allocated1 = memAfter1 - memBefore1;
 
-        long memAfter = sunThreadBean.getThreadAllocatedBytes(threadId);
-        long allocated = memAfter - memBefore;
-        System.out.println("Suspended ticks allocated bytes over " + ITERATIONS + " iterations: " + allocated);
+        // Window 2: 100k iterations
+        long memBefore2 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        for (int i = 0; i < ITERATIONS; i++) {
+            transition.update(playerId, world, room, notReady, noOpSwap);
+        }
+        long memAfter2 = sunThreadBean.getThreadAllocatedBytes(threadId);
+        long allocated2 = memAfter2 - memBefore2;
 
-        assertTrue(allocated < 1024, "Suspended ticks must have zero heap allocation (was " + allocated + " bytes)");
+        System.out.println("Suspended ticks window 1 (100k): " + allocated1 + " bytes, window 2 (100k): " + allocated2 + " bytes");
+
+        assertEquals(0, allocated1, "Suspended ticks window 1 must be strictly 0 bytes (was " + allocated1 + " bytes)");
+        assertEquals(0, allocated2, "Suspended ticks window 2 must be strictly 0 bytes (was " + allocated2 + " bytes)");
     }
 }

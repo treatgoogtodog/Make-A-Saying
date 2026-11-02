@@ -1,8 +1,9 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "test_01",
   "width": 40,
   "height": 12,
+  "entitySeq": 5,
   "tilesets": [
     {
       "alias": "a",
@@ -93,7 +94,76 @@
       "y": 16
     }
   ],
-  "entities": [ ],
+  "entities": [
+    {
+      "instanceId": "moving_platform_1",
+      "definition": "moving_platform",
+      "x": 280,
+      "y": 48,
+      "overrides": {
+        "collider": {
+          "width": 32,
+          "height": 8
+        },
+        "platform": {
+          "crushMode": "BLOCK",
+          "pauseTicks": 15,
+          "speed": 60.0,
+          "travelX": 80,
+          "travelY": 0
+        }
+      }
+    },
+    {
+      "instanceId": "moving_platform_2",
+      "definition": "moving_platform",
+      "x": 512,
+      "y": 32,
+      "overrides": {
+        "collider": {
+          "width": 32,
+          "height": 8
+        },
+        "platform": {
+          "crushMode": "BLOCK",
+          "pauseTicks": 15,
+          "speed": 60.0,
+          "travelX": 0,
+          "travelY": 64
+        }
+      }
+    },
+    {
+      "instanceId": "moving_platform_cond",
+      "definition": "moving_platform",
+      "x": 400,
+      "y": 48,
+      "overrides": {
+        "collider": {
+          "width": 32,
+          "height": 8
+        },
+        "platform": {
+          "crushMode": "BLOCK",
+          "pauseTicks": 15,
+          "speed": 60.0,
+          "travelX": 32,
+          "travelY": 0
+        }
+      },
+      "spawnCondition": {
+        "flag": "test.door_open",
+        "op": "==",
+        "value": true
+      }
+    },
+    {
+      "instanceId": "savepoint_3",
+      "definition": "savepoint",
+      "x": 80,
+      "y": 16
+    }
+  ],
   "exits": [
     {
       "id": "to_test_02",
@@ -102,7 +172,12 @@
       "width": 24,
       "height": 48,
       "targetRoom": "test_02",
-      "targetSpawn": "from_test_01"
+      "targetSpawn": "from_test_01",
+      "condition": {
+        "flag": "test.stage",
+        "op": ">=",
+        "value": 1
+      }
     }
   ]
 }

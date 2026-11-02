@@ -1,8 +1,9 @@
 {
-  "version": 2,
+  "version": 3,
   "id": "test_02",
   "width": 30,
   "height": 12,
+  "entitySeq": 3,
   "tilesets": [
     {
       "alias": "a",
@@ -97,7 +98,33 @@
       "y": 16
     }
   ],
-  "entities": [ ],
+  "entities": [
+    {
+      "instanceId": "moving_platform_1",
+      "definition": "moving_platform",
+      "x": 120,
+      "y": 40,
+      "overrides": {
+        "collider": {
+          "width": 32,
+          "height": 8
+        },
+        "platform": {
+          "crushMode": "BLOCK",
+          "pauseTicks": 15,
+          "speed": 60.0,
+          "travelX": 64,
+          "travelY": 0
+        }
+      }
+    },
+    {
+      "instanceId": "savepoint_2",
+      "definition": "savepoint",
+      "x": 80,
+      "y": 16
+    }
+  ],
   "exits": [
     {
       "id": "to_test_01",

@@ -20,6 +20,16 @@ public final class GameStateHash {
         RoomTransitionManager transition,
         RoomStateStore stateStore
     ) {
+        return compute(world, roomId, transition, stateStore, null);
+    }
+
+    public static long compute(
+        World world,
+        String roomId,
+        RoomTransitionManager transition,
+        RoomStateStore stateStore,
+        com.makeasaying.engine.flags.FlagStore flagStore
+    ) {
         long h = FNV_BASIS;
 
         // 1. World hash (entities, components, generations)
@@ -49,6 +59,12 @@ public final class GameStateHash {
         // 4. Room State Store
         if (stateStore != null) {
             h ^= stateStore.stateHash();
+            h *= FNV_PRIME;
+        }
+
+        // 5. Flags Store
+        if (flagStore != null) {
+            h ^= flagStore.computeStateHash(roomId);
             h *= FNV_PRIME;
         }
 

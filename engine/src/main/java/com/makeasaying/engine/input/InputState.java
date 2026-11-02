@@ -108,6 +108,13 @@ public final class InputState {
         return idx != null && pressed[idx];
     }
 
+    public void consumePress(String actionId) {
+        Integer idx = actionIndices.get(actionId);
+        if (idx != null) {
+            pressed[idx] = false;
+        }
+    }
+
     public boolean isReleased(String actionId) {
         Integer idx = actionIndices.get(actionId);
         return idx != null && released[idx];

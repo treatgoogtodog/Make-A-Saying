@@ -37,12 +37,28 @@ public final class ContextBindings {
         }
     }
 
-    public String getActionForKey(String context, int keyCode) {
-        String[] fast = fastLookup.get(context);
-        if (fast != null && keyCode >= 0 && keyCode < 512) {
-            return fast[keyCode];
+    public String getActionForInput(String context, int keyCode, int modifierMask) {
+        Map<Integer, String> map = keyToAction.get(context);
+        if (map == null) return null;
+
+        if (modifierMask != 0) {
+            int chord = (modifierMask << 16) | (keyCode & 0xFFFF);
+            String action = map.get(chord);
+            if (action != null) return action;
+        }
+
+        if (modifierMask == 0) {
+            String[] fast = fastLookup.get(context);
+            if (fast != null && keyCode >= 0 && keyCode < 512) {
+                return fast[keyCode];
+            }
+            return map.get(keyCode);
         }
         return null;
+    }
+
+    public String getActionForKey(String context, int keyCode) {
+        return getActionForInput(context, keyCode, 0);
     }
 
     public List<Integer> getKeysForAction(String context, String actionId) {

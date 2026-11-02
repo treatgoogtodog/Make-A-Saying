@@ -8,6 +8,7 @@ import com.makeasaying.engine.entity.components.InputStateComponent;
 import com.makeasaying.engine.entity.components.JumpStateComponent;
 import com.makeasaying.engine.entity.components.PlatformComponent;
 import com.makeasaying.engine.entity.components.RoomScopeComponent;
+import com.makeasaying.engine.entity.components.SavepointComponent;
 
 /**
  * Deep-copied snapshot of World state per AGENTS.md section 4.10 and M6a brief.
@@ -32,6 +33,8 @@ public final class WorldSnapshot {
     final JumpStateComponent[] jumpStates;
     final PlatformComponent[] platforms;
     final RoomScopeComponent[] roomScopes;
+    final SavepointComponent[] savepoints;
+    final String[] instanceIds;
 
     WorldSnapshot(
         int[] generations,
@@ -49,7 +52,9 @@ public final class WorldSnapshot {
         InputStateComponent[] inputStates,
         JumpStateComponent[] jumpStates,
         PlatformComponent[] platforms,
-        RoomScopeComponent[] roomScopes
+        RoomScopeComponent[] roomScopes,
+        SavepointComponent[] savepoints,
+        String[] instanceIds
     ) {
         this.generations = generations;
         this.alive = alive;
@@ -67,5 +72,7 @@ public final class WorldSnapshot {
         this.jumpStates = jumpStates;
         this.platforms = platforms;
         this.roomScopes = roomScopes;
+        this.savepoints = savepoints;
+        this.instanceIds = instanceIds;
     }
 }

@@ -144,8 +144,12 @@ class RoomWatcherPlayerSwapTest {
         Files.setLastModifiedTime(roomFile, FileTime.fromMillis(System.currentTimeMillis() + 1000));
 
         watcher.checkAndReload();
-        Thread.sleep(100);
-        jobs.drain();
+        long waitStart = System.currentTimeMillis();
+        while (System.currentTimeMillis() - waitStart < 3000) {
+            jobs.drain();
+            if (activeResult.get() != null) break;
+            Thread.sleep(10);
+        }
 
         assertNotNull(activeResult.get());
         TileGrid updatedGrid = activeResult.get().grid();

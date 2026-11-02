@@ -3,6 +3,7 @@ package com.makeasaying.engine.world;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -27,7 +28,7 @@ public final class RoomStateStore {
     public record Entry(String roomId, String key, ValueType type, int intValue, String stringValue) {
         public Entry {
             if (roomId == null || roomId.isBlank()) throw new IllegalArgumentException("roomId must not be blank");
-            if (key == null || !KEY_PATTERN.matcher(key).matches()) {
+            if (!isValidKey(key)) {
                 throw new IllegalArgumentException("Invalid key '" + key + "': must match [a-z0-9_.]+");
             }
             if (type == null) throw new IllegalArgumentException("type must not be null");
@@ -39,8 +40,19 @@ public final class RoomStateStore {
 
     public RoomStateStore() {}
 
+    public static boolean isValidKey(String key) {
+        if (key == null || key.isEmpty()) return false;
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private void validateKey(String key) {
-        if (key == null || !KEY_PATTERN.matcher(key).matches()) {
+        if (!isValidKey(key)) {
             throw new IllegalArgumentException("Invalid key '" + key + "': must match [a-z0-9_.]+");
         }
     }
@@ -59,8 +71,7 @@ public final class RoomStateStore {
     }
 
     public int getInt(String roomId, String key, int defaultValue) {
-        validateRoomId(roomId);
-        validateKey(key);
+        if (roomId == null || key == null) return defaultValue;
         Map<String, Entry> roomMap = store.get(roomId);
         if (roomMap == null) return defaultValue;
         Entry entry = roomMap.get(key);
@@ -83,8 +94,7 @@ public final class RoomStateStore {
     }
 
     public String getString(String roomId, String key, String defaultValue) {
-        validateRoomId(roomId);
-        validateKey(key);
+        if (roomId == null || key == null) return defaultValue;
         Map<String, Entry> roomMap = store.get(roomId);
         if (roomMap == null) return defaultValue;
         Entry entry = roomMap.get(key);
@@ -93,15 +103,13 @@ public final class RoomStateStore {
     }
 
     public boolean has(String roomId, String key) {
-        validateRoomId(roomId);
-        validateKey(key);
+        if (roomId == null || key == null) return false;
         Map<String, Entry> roomMap = store.get(roomId);
         return roomMap != null && roomMap.containsKey(key);
     }
 
     public void remove(String roomId, String key) {
-        validateRoomId(roomId);
-        validateKey(key);
+        if (roomId == null || key == null) return;
         Map<String, Entry> roomMap = store.get(roomId);
         if (roomMap != null) {
             roomMap.remove(key);
@@ -113,6 +121,24 @@ public final class RoomStateStore {
 
     public void clear() {
         store.clear();
+    }
+
+    public void copyFrom(RoomStateStore other) {
+        clear();
+        if (other == null) return;
+        for (Entry e : other.getAllEntriesSorted()) {
+            if (e.type() == ValueType.INT) {
+                setInt(e.roomId(), e.key(), e.intValue());
+            } else {
+                setString(e.roomId(), e.key(), e.stringValue());
+            }
+        }
+    }
+
+    public RoomStateStore copy() {
+        RoomStateStore copy = new RoomStateStore();
+        copy.copyFrom(this);
+        return copy;
     }
 
     /**
@@ -164,5 +190,42 @@ public final class RoomStateStore {
             }
         }
         return h;
+    }
+
+    public Map<String, Map<String, Object>> exportRoomRecords() {
+        Map<String, Map<String, Object>> records = new LinkedHashMap<>();
+        for (Entry e : getAllEntriesSorted()) {
+            records.computeIfAbsent(e.roomId(), r -> new LinkedHashMap<>())
+                .put(e.key(), e.type() == ValueType.INT ? e.intValue() : e.stringValue());
+        }
+        return records;
+    }
+
+    public void restoreRoomRecords(Map<String, Map<String, Object>> records) {
+        clear();
+        if (records == null) return;
+        for (Map.Entry<String, Map<String, Object>> rEntry : records.entrySet()) {
+            String rId = rEntry.getKey();
+            if (rEntry.getValue() == null) continue;
+            for (Map.Entry<String, Object> kEntry : rEntry.getValue().entrySet()) {
+                String key = kEntry.getKey();
+                Object val = kEntry.getValue();
+                if (val instanceof Map<?, ?> m) {
+                    Object type = m.get("type");
+                    Object v = m.get("value");
+                    if ("INT".equals(type) && v instanceof Number n) {
+                        setInt(rId, key, n.intValue());
+                    } else if (v != null) {
+                        setString(rId, key, v.toString());
+                    }
+                } else if (val instanceof Number n) {
+                    setInt(rId, key, n.intValue());
+                } else if (val instanceof Boolean b) {
+                    setInt(rId, key, b ? 1 : 0);
+                } else if (val != null) {
+                    setString(rId, key, val.toString());
+                }
+            }
+        }
     }
 }

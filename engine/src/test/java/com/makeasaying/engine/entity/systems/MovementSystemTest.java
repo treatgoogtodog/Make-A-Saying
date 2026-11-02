@@ -259,4 +259,27 @@ class MovementSystemTest {
         assertEquals(0f, body.vx, 0.001f);
         assertTrue(body.x + collider.getRight(0) <= 160);
     }
+
+    @Test
+    void testStuckBodySkipsMovementAndPreservesSubpixelRemainder() {
+        // Place solid tile directly overlapping body collider at (100, 16)
+        grid.setTile(6, 1, TileShape.SOLID); // covers x: 96..111, y: 16..31
+
+        body.resetPosition(100, 16);
+        body.subpixelX = 0.42f;
+        body.subpixelY = -0.37f;
+        body.vx = 5.0f;
+        body.vy = -3.0f;
+
+        // Tick simulation
+        tick();
+
+        // Position must be completely unchanged, movement skipped
+        assertEquals(100, body.x, "Stuck entity x must remain unchanged");
+        assertEquals(16, body.y, "Stuck entity y must remain unchanged");
+
+        // Subpixel remainders must be preserved untouched (DEC-029)
+        assertEquals(0.42f, body.subpixelX, 0.0001f, "subpixelX remainder must be left untouched when stuck");
+        assertEquals(-0.37f, body.subpixelY, 0.0001f, "subpixelY remainder must be left untouched when stuck");
+    }
 }

@@ -14,6 +14,12 @@
       "toggle_editor": [
         "KEY_F1"
       ],
+      "debug_flags": [
+        "KEY_F2"
+      ],
+      "debug_load_checkpoint": [
+        "KEY_F4"
+      ],
       "editor_play": [
         "KEY_F7"
       ],
@@ -62,19 +68,11 @@
         "KEY_S",
         "KEY_DOWN"
       ],
-      "interact": [
-        "KEY_ENTER",
-        "KEY_SPACE"
-      ],
       "cancel": [
         "KEY_BACKSPACE"
       ]
     },
     "cutscene": {
-      "interact": [
-        "KEY_SPACE",
-        "KEY_ENTER"
-      ],
       "cancel": [
         "KEY_BACKSPACE"
       ]
@@ -82,6 +80,12 @@
     "editor": {
       "cancel": [
         "KEY_BACKSPACE"
+      ],
+      "editor_undo": [
+        "CTRL+KEY_Z"
+      ],
+      "editor_redo": [
+        "CTRL+KEY_Y"
       ]
     }
   }

@@ -1,0 +1,26 @@
+{
+  "version" : 1,
+  "gameVersion" : "0.1.0",
+  "checksum" : "7e6beaee25939e21f534505f880d89c00a2ebf912dd471e13fbeab7ba1c13dc5",
+  "data" : {
+    "playtimeTicks" : 1800,
+    "timestampUtc" : "2026-11-02T08:30:00Z",
+    "currentRoomId" : "test_02",
+    "savepointInstanceId" : "savepoint_2",
+    "globalFlags" : {
+      "test.unread_flag" : false,
+      "test.stage" : 3
+    },
+    "roomRecords" : {
+      "test_01" : {
+        "flag.test.door_open" : {
+          "type" : "INT",
+          "value" : 1
+        }
+      },
+      "test_02" : {
+        "custom.visited" : 1
+      }
+    }
+  }
+}

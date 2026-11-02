@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "id": "moving_platform",
+  "tags": [
+    "platform"
+  ],
+  "debugColor": "#4488FF",
+  "placeable": true,
+  "components": {
+    "body": {
+      "x": 0,
+      "y": 0
+    },
+    "collider": {
+      "width": 48,
+      "height": 16,
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    "platform": {
+      "travelX": 0,
+      "travelY": -48,
+      "speed": 32.0,
+      "pauseTicks": 30,
+      "crushMode": "BLOCK"
+    },
+    "room_scope": {
+      "scope": "ROOM_LOCAL"
+    }
+  }
+}

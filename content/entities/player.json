@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "id": "player",
+  "tags": [
+    "player"
+  ],
+  "debugColor": "#00FF00",
+  "placeable": false,
+  "components": {
+    "body": {
+      "x": 0,
+      "y": 0
+    },
+    "collider": {
+      "width": 12,
+      "height": 36,
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    "facing": {
+      "facingRight": true
+    },
+    "controller": {
+      "source": "PLAYER"
+    },
+    "room_scope": {
+      "scope": "PERSISTENT_CARRIED"
+    },
+    "jump_state": {
+      "coyoteTicks": 0,
+      "jumpBufferTicks": 0
+    }
+  }
+}

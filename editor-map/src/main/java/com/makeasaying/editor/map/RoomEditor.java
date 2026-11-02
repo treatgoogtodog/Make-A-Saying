@@ -39,6 +39,7 @@ import com.makeasaying.engine.world.Tileset;
 import imgui.ImGui;
 import imgui.flag.ImGuiInputTextFlags;
 import imgui.flag.ImGuiWindowFlags;
+import imgui.type.ImFloat;
 import imgui.type.ImInt;
 import imgui.type.ImString;
 
@@ -68,16 +69,27 @@ public final class RoomEditor implements Disposable {
     private final ImString newAliasInput = new ImString(16);
     private final ImString newTilesetIdInput = new ImString(32);
 
+    private final ImString entitySearchInput = new ImString(32);
+
     public RoomEditor(
         RoomDocument initialDoc,
         Path initialPath,
         RoomRenderer roomRenderer,
-        Map<String, Tileset> tilesets
+        Map<String, Tileset> tilesets,
+        Map<String, com.makeasaying.engine.entity.EntityDefinition> entityDefs,
+        com.makeasaying.engine.schema.ComponentSchemaRegistry schemaRegistry
     ) {
         this.state = new RoomEditorState(initialDoc, initialPath);
         this.viewport = new RoomViewport();
         this.roomRenderer = roomRenderer;
         this.tilesets = tilesets;
+
+        com.makeasaying.engine.schema.ComponentSchemaRegistry reg = (schemaRegistry != null)
+            ? schemaRegistry
+            : com.makeasaying.engine.schema.ComponentSchemaRegistry.createDefault();
+        this.state.setSchemaRegistry(reg);
+        this.state.setEntityDefs(entityDefs != null ? entityDefs : loadEntityDefinitions(reg));
+        this.state.setEntityPaletteModel(new com.makeasaying.editor.map.model.EntityPaletteModel(this.state.getEntityDefs()));
 
         // Initialize hot reload handler
         this.state.setHotReloadHandler(new EditorHotReloadHandler(this::loadFromDisk));
@@ -88,13 +100,41 @@ public final class RoomEditor implements Disposable {
         }
     }
 
+    public RoomEditor(
+        RoomDocument initialDoc,
+        Path initialPath,
+        RoomRenderer roomRenderer,
+        Map<String, Tileset> tilesets
+    ) {
+        this(initialDoc, initialPath, roomRenderer, tilesets, null, null);
+    }
+
+    private static Map<String, com.makeasaying.engine.entity.EntityDefinition> loadEntityDefinitions(com.makeasaying.engine.schema.ComponentSchemaRegistry reg) {
+        Map<String, com.makeasaying.engine.entity.EntityDefinition> defs = new java.util.LinkedHashMap<>();
+        Path entDir = Path.of("content/entities");
+        if (!Files.exists(entDir)) entDir = Path.of("..", "content", "entities");
+        if (Files.exists(entDir)) {
+            try (var stream = Files.list(entDir)) {
+                for (Path p : stream.filter(p -> p.toString().endsWith(".json")).toList()) {
+                    try {
+                        com.makeasaying.engine.entity.EntityDefinition def = com.makeasaying.data.entity.EntityDefinitionLoader.load(p, reg);
+                        defs.put(def.id(), def);
+                    } catch (Exception e) {
+                        Log.error(LogCategory.DATA, "Failed to load entity definition %s: %s", p, e.getMessage());
+                    }
+                }
+            } catch (IOException ignored) {}
+        }
+        return defs;
+    }
+
     public RoomEditorState getState() {
         return state;
     }
 
     public void updateAndRender(float delta) {
         frameCounter++;
-        state.getValidatorPresenter().update(frameCounter, state.getDocument(), tilesets);
+        state.getValidatorPresenter().update(frameCounter, state.getDocument(), tilesets, state.getEntityDefs(), state.getSchemaRegistry());
 
         // 1. Main menu bar
         renderMainMenuBar();
@@ -113,13 +153,16 @@ public final class RoomEditor implements Disposable {
         // 5. Tileset Palette Window
         renderPalettePanel();
 
-        // 6. Inspector Window
+        // 6. Entity Palette Window
+        renderEntityPalettePanel();
+
+        // 7. Inspector Window
         renderInspectorPanel();
 
-        // 7. Validator Window
+        // 8. Validator Window
         renderValidatorPanel();
 
-        // 8. Modals
+        // 9. Modals
         renderModals();
     }
 
@@ -222,6 +265,15 @@ public final class RoomEditor implements Disposable {
         ImGui.sameLine();
         selectToolButton("Eye Dropper", EyeDropperTool.class, () -> new EyeDropperTool(state::setActiveTileToken));
 
+        ImGui.sameLine();
+        ImGui.separator();
+        ImGui.sameLine();
+
+        // Snap toggle
+        boolean snap = state.isEntitySnapToGrid();
+        if (ImGui.checkbox("Grid Snap##ent_snap", snap)) {
+            state.setEntitySnapToGrid(!snap);
+        }
         ImGui.sameLine();
         ImGui.separator();
         ImGui.sameLine();
@@ -474,7 +526,210 @@ public final class RoomEditor implements Disposable {
             }
         }
 
+        ImGui.separator();
+
+        // 5. Entities Inspector
+        ImGui.text("Entities (" + doc.getEntities().size() + "):");
+        String selectedId = state.getSelectionModel().getSelectedInstanceId();
+        com.makeasaying.engine.world.RoomEntityData selectedEntity = null;
+
+        List<com.makeasaying.engine.world.RoomEntityData> entities = new ArrayList<>(doc.getEntities());
+        for (com.makeasaying.engine.world.RoomEntityData ed : entities) {
+            boolean isSel = ed.instanceId().equals(selectedId);
+            if (isSel) selectedEntity = ed;
+
+            if (ImGui.selectable(ed.instanceId() + " (" + ed.definition() + ")##ent_list", isSel)) {
+                state.getSelectionModel().setSelectedInstanceId(ed.instanceId());
+            }
+            ImGui.sameLine();
+            if (ImGui.button("Focus##ent_" + ed.instanceId())) {
+                state.setCamX(ed.x() - 160);
+                state.setCamY(ed.y() - 90);
+                state.getSelectionModel().setSelectedInstanceId(ed.instanceId());
+            }
+            ImGui.sameLine();
+            if (ImGui.button("Delete##ent_" + ed.instanceId())) {
+                doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.DeleteEntityCommand(doc, ed));
+                if (isSel) state.getSelectionModel().clearSelection();
+            }
+        }
+
+        // Selected Entity Schema-Driven Inspector
+        if (selectedEntity != null) {
+            ImGui.separator();
+            ImGui.textColored(0.2f, 0.8f, 1.0f, 1.0f, "Selected: " + selectedEntity.instanceId());
+            ImGui.text("Definition: " + selectedEntity.definition());
+            ImGui.text(String.format("Position: (%d, %d)", selectedEntity.x(), selectedEntity.y()));
+
+            com.makeasaying.engine.entity.EntityDefinition def = state.getEntityDefs().get(selectedEntity.definition());
+            if (def != null && state.getSchemaRegistry() != null) {
+                com.makeasaying.editor.map.model.InspectorModel inspModel =
+                    new com.makeasaying.editor.map.model.InspectorModel(selectedEntity, def, state.getSchemaRegistry());
+                List<com.makeasaying.editor.map.model.InspectorModel.ComponentNode> compNodes = inspModel.buildComponentNodes();
+
+                for (com.makeasaying.editor.map.model.InspectorModel.ComponentNode compNode : compNodes) {
+                    if (ImGui.collapsingHeader(compNode.componentId() + "##comp_" + compNode.componentId(), imgui.flag.ImGuiTreeNodeFlags.DefaultOpen)) {
+                        for (com.makeasaying.editor.map.model.InspectorModel.FieldNode fn : compNode.fields()) {
+                            renderInspectorField(doc, selectedEntity, compNode.componentId(), fn);
+                        }
+                    }
+                }
+            }
+        }
+
         ImGui.end();
+    }
+
+    private void renderInspectorField(
+        RoomDocument doc,
+        com.makeasaying.engine.world.RoomEntityData entity,
+        String compId,
+        com.makeasaying.editor.map.model.InspectorModel.FieldNode fn
+    ) {
+        com.makeasaying.engine.schema.ComponentField f = fn.field();
+        String fieldLabel = f.name() + (fn.isOverridden() ? " [Overridden]" : "");
+
+        if (!fn.isOverridable()) {
+            ImGui.text(f.name() + ": " + fn.currentValue() + " (read-only)");
+            return;
+        }
+
+        switch (f.type()) {
+            case INT -> {
+                ImInt val = new ImInt(((Number) fn.currentValue()).intValue());
+                ImGui.inputInt(fieldLabel + "##" + compId + "_" + f.name(), val);
+                if (ImGui.isItemDeactivatedAfterEdit()) {
+                    doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.EditOverrideFieldCommand(
+                        doc, entity.instanceId(), compId, f.name(),
+                        fn.isOverridden() ? fn.currentValue() : null,
+                        val.get()
+                    ));
+                }
+            }
+            case FLOAT -> {
+                ImFloat val = new ImFloat(((Number) fn.currentValue()).floatValue());
+                ImGui.inputFloat(fieldLabel + "##" + compId + "_" + f.name(), val);
+                if (ImGui.isItemDeactivatedAfterEdit()) {
+                    doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.EditOverrideFieldCommand(
+                        doc, entity.instanceId(), compId, f.name(),
+                        fn.isOverridden() ? fn.currentValue() : null,
+                        val.get()
+                    ));
+                }
+            }
+            case BOOL -> {
+                boolean cur = Boolean.TRUE.equals(fn.currentValue());
+                if (ImGui.checkbox(fieldLabel + "##" + compId + "_" + f.name(), cur)) {
+                    doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.EditOverrideFieldCommand(
+                        doc, entity.instanceId(), compId, f.name(),
+                        fn.isOverridden() ? fn.currentValue() : null,
+                        !cur
+                    ));
+                }
+            }
+            case ENUM -> {
+                if (ImGui.beginCombo(fieldLabel + "##" + compId + "_" + f.name(), String.valueOf(fn.currentValue()))) {
+                    for (String constant : f.enumConstants()) {
+                        boolean sel = constant.equals(String.valueOf(fn.currentValue()));
+                        if (ImGui.selectable(constant, sel)) {
+                            doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.EditOverrideFieldCommand(
+                                doc, entity.instanceId(), compId, f.name(),
+                                fn.isOverridden() ? fn.currentValue() : null,
+                                constant
+                            ));
+                        }
+                    }
+                    ImGui.endCombo();
+                }
+            }
+            case STRING -> {
+                ImString str = new ImString(String.valueOf(fn.currentValue()), 64);
+                ImGui.inputText(fieldLabel + "##" + compId + "_" + f.name(), str);
+                if (ImGui.isItemDeactivatedAfterEdit()) {
+                    doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.EditOverrideFieldCommand(
+                        doc, entity.instanceId(), compId, f.name(),
+                        fn.isOverridden() ? fn.currentValue() : null,
+                        str.get()
+                    ));
+                }
+            }
+        }
+
+        if (fn.isOverridden()) {
+            ImGui.sameLine();
+            if (ImGui.button("Reset##" + compId + "_" + f.name())) {
+                doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.EditOverrideFieldCommand(
+                    doc, entity.instanceId(), compId, f.name(),
+                    fn.currentValue(),
+                    null
+                ));
+            }
+        }
+    }
+
+    private void renderEntityPalettePanel() {
+        ImGui.begin("Entity Palette##RoomEntityPalette");
+
+        com.makeasaying.editor.map.model.EntityPaletteModel palette = state.getEntityPaletteModel();
+        if (palette == null) {
+            ImGui.text("No entity palette available.");
+            ImGui.end();
+            return;
+        }
+
+        if (ImGui.inputText("Search##ent_search", entitySearchInput)) {
+            palette.setSearchQuery(entitySearchInput.get());
+        }
+
+        ImGui.separator();
+
+        List<com.makeasaying.engine.entity.EntityDefinition> defs = palette.getFilteredDefinitions();
+        for (com.makeasaying.engine.entity.EntityDefinition def : defs) {
+            boolean isSel = def.id().equals(palette.getSelectedDefinitionId());
+            if (isSel) {
+                ImGui.pushStyleColor(imgui.flag.ImGuiCol.Button, 0.2f, 0.6f, 0.9f, 1.0f);
+            }
+            if (ImGui.button(def.id() + "##def_btn", 160, 28)) {
+                palette.setSelectedDefinitionId(def.id());
+            }
+            if (isSel) {
+                ImGui.popStyleColor();
+            }
+
+            if (ImGui.isItemHovered()) {
+                ImGui.beginTooltip();
+                ImGui.text("ID: " + def.id());
+                ImGui.text("Tags: " + def.tags());
+                ImGui.text("Color: " + def.debugColor());
+                ImGui.endTooltip();
+            }
+
+            ImGui.sameLine();
+            if (ImGui.button("Place at Center##" + def.id())) {
+                placeEntityAtCenter(def.id());
+            }
+        }
+
+        ImGui.end();
+    }
+
+    private void placeEntityAtCenter(String defId) {
+        RoomDocument doc = state.getDocument();
+        int seq = doc.allocateEntitySeq();
+        String instanceId = defId + "_" + seq;
+
+        int spawnX = (doc.getWidth() * 16) / 2;
+        int spawnY = (doc.getHeight() * 16) / 2;
+        if (state.isEntitySnapToGrid()) {
+            spawnX = (spawnX / 16) * 16;
+            spawnY = (spawnY / 16) * 16;
+        }
+
+        com.makeasaying.engine.world.RoomEntityData newEntity = new com.makeasaying.engine.world.RoomEntityData(
+            instanceId, defId, spawnX, spawnY, java.util.Collections.emptyMap()
+        );
+        doc.getUndoStack().execute(new com.makeasaying.editor.map.commands.EntityCommands.PlaceEntityCommand(doc, newEntity, seq));
+        state.getSelectionModel().setSelectedInstanceId(instanceId);
     }
 
     private void renderValidatorPanel() {
@@ -613,7 +868,7 @@ public final class RoomEditor implements Disposable {
         try {
             Path path = state.getCurrentFilePath();
             RoomWriter.save(state.getDocument().toRoom(), path);
-            state.getDocument().getUndoStack().markSaved();
+            state.getDocument().updateSavedFloorOnSave();
             if (state.getHotReloadHandler() != null) {
                 state.getHotReloadHandler().onEditorSaved();
             }
@@ -645,18 +900,41 @@ public final class RoomEditor implements Disposable {
 
         long playerId = PlayerFactory.createPlayer(world, sp.x(), sp.y());
 
+        // Spawn room-local entities into simulation world
+        if (state.getSchemaRegistry() != null) {
+            com.makeasaying.engine.entity.EntitySpawner spawner = new com.makeasaying.engine.entity.EntitySpawner(state.getSchemaRegistry());
+            for (com.makeasaying.engine.world.RoomEntityData ed : state.getDocument().getEntities()) {
+                if (ed.spawnCondition() != null && state.getFlagStore() != null &&
+                    !ed.spawnCondition().evaluate(state.getFlagStore(), state.getDocument().getId())) {
+                    continue;
+                }
+                com.makeasaying.engine.entity.EntityDefinition def = state.getEntityDefs().get(ed.definition());
+                if (def != null) {
+                    spawner.spawn(world, def, ed.instanceId(), ed.x(), ed.y(), ed.overrides());
+                }
+            }
+        }
+        world.applyDeferredLifecycle();
+
         state.setPlayWorld(world);
         state.setPlayPlayerId(playerId);
         state.setPlaySnapshot(world.snapshot());
+        state.setCompositePlaySnapshot(com.makeasaying.engine.entity.CompositeGameSnapshot.capture(
+            world, state.getFlagStore(), state.getRoomStateStore()
+        ));
         state.setPlaying(true);
 
-        Log.info(LogCategory.ENGINE, "Editor Play mode started for room %s", state.getDocument().getId());
+        Log.info(LogCategory.ENGINE, "Editor Play mode started for room %s with %d entities",
+            state.getDocument().getId(), state.getDocument().getEntities().size());
     }
 
     public void stopPlay() {
         if (!state.isPlaying()) return;
 
-        if (state.getPlayWorld() != null && state.getPlaySnapshot() != null) {
+        if (state.getCompositePlaySnapshot() != null) {
+            state.getCompositePlaySnapshot().restore(state.getPlayWorld(), state.getFlagStore(), state.getRoomStateStore());
+            state.setCompositePlaySnapshot(null);
+        } else if (state.getPlayWorld() != null && state.getPlaySnapshot() != null) {
             state.getPlayWorld().restore(state.getPlaySnapshot());
         }
         state.setPlaying(false);

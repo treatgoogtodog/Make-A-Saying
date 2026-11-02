@@ -18,7 +18,7 @@ import java.util.function.BooleanSupplier;
  * and deterministic tick suspension while waiting for worker preload.
  */
 public final class RoomTransitionManager {
-    public static final int TIMEOUT_TICKS = 600; // 10 seconds at 60 Hz
+    public static final long TIMEOUT_NANOS = 10_000_000_000L; // 10 seconds monotonic timeout
 
     @FunctionalInterface
     public interface SwapCallback {
@@ -26,22 +26,29 @@ public final class RoomTransitionManager {
     }
 
     private final RoomTransitionConfig config;
+    private final java.util.function.LongSupplier nanoTimeSupplier;
     private RoomTransitionState state = RoomTransitionState.IDLE;
     private int transitionTick = 0;
-    private int waitTimeoutTick = 0;
+    private long waitStartTimeNanos = -1L;
     private boolean waitingForLoad = false;
     private RoomExit pendingExit = null;
+    private Runnable pendingCustomSwap = null;
 
     private static final int MAX_DISABLED_EXITS = 16;
     private final String[] disabledExitIds = new String[MAX_DISABLED_EXITS];
     private int disabledExitCount = 0;
 
-    public RoomTransitionManager(RoomTransitionConfig config) {
+    public RoomTransitionManager(RoomTransitionConfig config, java.util.function.LongSupplier nanoTimeSupplier) {
         this.config = config != null ? config : RoomTransitionConfig.DEFAULT;
+        this.nanoTimeSupplier = nanoTimeSupplier != null ? nanoTimeSupplier : System::nanoTime;
+    }
+
+    public RoomTransitionManager(RoomTransitionConfig config) {
+        this(config, System::nanoTime);
     }
 
     public RoomTransitionManager() {
-        this(RoomTransitionConfig.DEFAULT);
+        this(RoomTransitionConfig.DEFAULT, System::nanoTime);
     }
 
     public RoomTransitionConfig getConfig() {
@@ -94,12 +101,27 @@ public final class RoomTransitionManager {
         return false;
     }
 
+    public boolean isTransitionActive() {
+        return state != RoomTransitionState.IDLE;
+    }
+
     public void startTransition(RoomExit exit) {
         if (exit == null || state != RoomTransitionState.IDLE) return;
         this.pendingExit = exit;
+        this.pendingCustomSwap = null;
         this.state = RoomTransitionState.FADE_OUT;
         this.transitionTick = 0;
-        this.waitTimeoutTick = 0;
+        this.waitStartTimeNanos = -1L;
+        this.waitingForLoad = false;
+    }
+
+    public void startCustomTransition(Runnable onSwap) {
+        if (onSwap == null || state != RoomTransitionState.IDLE) return;
+        this.pendingExit = null;
+        this.pendingCustomSwap = onSwap;
+        this.state = RoomTransitionState.FADE_OUT;
+        this.transitionTick = 0;
+        this.waitStartTimeNanos = -1L;
         this.waitingForLoad = false;
     }
 
@@ -108,6 +130,7 @@ public final class RoomTransitionManager {
         if (pendingExit != null) {
             disableExit(pendingExit.id());
         }
+        this.pendingCustomSwap = null;
         this.state = RoomTransitionState.FADE_IN;
         this.transitionTick = 0;
         this.waitingForLoad = false;
@@ -126,63 +149,88 @@ public final class RoomTransitionManager {
         BooleanSupplier isTargetReady,
         SwapCallback swapCallback
     ) {
-        switch (state) {
-            case IDLE -> {
-                updateExitOverlapsAndTrigger(controlledEntityId, world, currentRoom);
-                return true;
+        return update(controlledEntityId, world, currentRoom, null, isTargetReady, swapCallback);
+    }
+
+    /**
+     * Updates transition state with FlagStore condition evaluation and room_temp clearing.
+     */
+    public boolean update(
+        long controlledEntityId,
+        World world,
+        Room currentRoom,
+        com.makeasaying.engine.flags.FlagStore flagStore,
+        BooleanSupplier isTargetReady,
+        SwapCallback swapCallback
+    ) {
+        if (state == RoomTransitionState.IDLE) {
+            updateExitOverlapsAndTrigger(controlledEntityId, world, currentRoom, flagStore);
+            return true;
+        } else if (state == RoomTransitionState.FADE_OUT) {
+            transitionTick++;
+            if (transitionTick >= config.fadeOutTicks()) {
+                state = RoomTransitionState.HOLD_WAIT_SWAP;
+                transitionTick = 0;
+                waitStartTimeNanos = -1L;
             }
-            case FADE_OUT -> {
+            return true;
+        } else if (state == RoomTransitionState.HOLD_WAIT_SWAP) {
+            if (transitionTick < config.holdTicks()) {
                 transitionTick++;
-                if (transitionTick >= config.fadeOutTicks()) {
-                    state = RoomTransitionState.HOLD_WAIT_SWAP;
-                    transitionTick = 0;
-                    waitTimeoutTick = 0;
-                }
                 return true;
             }
-            case HOLD_WAIT_SWAP -> {
-                if (transitionTick < config.holdTicks()) {
-                    transitionTick++;
+
+            // We have held for holdTicks. Check if target room is ready to swap.
+            boolean ready = (pendingCustomSwap != null) || ((isTargetReady != null) && isTargetReady.getAsBoolean());
+            if (!ready) {
+                long now = nanoTimeSupplier.getAsLong();
+                if (waitStartTimeNanos < 0) {
+                    waitStartTimeNanos = now;
+                }
+                waitingForLoad = true;
+                if (now - waitStartTimeNanos > TIMEOUT_NANOS) {
+                    abortTransition("Target room load timed out after 10 seconds");
                     return true;
                 }
+                // Suspend tick advance
+                return false;
+            }
 
-                // We have held for holdTicks. Check if target room is ready to swap.
-                boolean ready = (isTargetReady != null) && isTargetReady.getAsBoolean();
-                if (!ready) {
-                    waitingForLoad = true;
-                    waitTimeoutTick++;
-                    if (waitTimeoutTick > TIMEOUT_TICKS) {
-                        abortTransition("Target room load timed out after 10 seconds");
-                        return true;
-                    }
-                    // Suspend tick advance
-                    return false;
-                }
+            // Target room is ready: perform swap!
+            waitingForLoad = false;
+            waitStartTimeNanos = -1L;
+            if (flagStore != null) {
+                flagStore.clearRoomTemp(transitionTick);
+            }
+            if (pendingCustomSwap != null) {
+                Runnable customSwap = pendingCustomSwap;
+                pendingCustomSwap = null;
+                customSwap.run();
+            } else if (swapCallback != null && pendingExit != null) {
+                swapCallback.performSwap(pendingExit);
+            }
 
-                // Target room is ready: perform swap!
-                waitingForLoad = false;
-                if (swapCallback != null && pendingExit != null) {
-                    swapCallback.performSwap(pendingExit);
-                }
-
-                state = RoomTransitionState.FADE_IN;
+            state = RoomTransitionState.FADE_IN;
+            transitionTick = 0;
+            return true;
+        } else if (state == RoomTransitionState.FADE_IN) {
+            transitionTick++;
+            if (transitionTick >= config.fadeInTicks()) {
+                state = RoomTransitionState.IDLE;
                 transitionTick = 0;
-                return true;
+                pendingExit = null;
             }
-            case FADE_IN -> {
-                transitionTick++;
-                if (transitionTick >= config.fadeInTicks()) {
-                    state = RoomTransitionState.IDLE;
-                    transitionTick = 0;
-                    pendingExit = null;
-                }
-                return true;
-            }
+            return true;
         }
         return true;
     }
 
-    private void updateExitOverlapsAndTrigger(long controlledEntityId, World world, Room currentRoom) {
+    private void updateExitOverlapsAndTrigger(
+        long controlledEntityId,
+        World world,
+        Room currentRoom,
+        com.makeasaying.engine.flags.FlagStore flagStore
+    ) {
         if (currentRoom == null || world == null || !world.isAlive(controlledEntityId)) return;
 
         BodyComponent body = world.getBody(controlledEntityId);
@@ -222,19 +270,27 @@ public final class RoomTransitionManager {
             RoomExit exit = exits.get(j);
             if (exit.overlaps(px, py, pw, ph)) {
                 if (!isExitDisabled(exit.id())) {
-                    startTransition(exit);
-                    break;
+                    if (exit.condition() != null && flagStore != null && !exit.condition().evaluate(flagStore, currentRoom.id())) {
+                        com.makeasaying.engine.util.Log.debug(com.makeasaying.engine.util.LogCategory.ENGINE,
+                            "Exit '%s' condition false, transition blocked", exit.id());
+                    } else {
+                        startTransition(exit);
+                        break;
+                    }
                 }
             }
         }
     }
 
     public float getFadeAlpha() {
-        return switch (state) {
-            case IDLE -> 0.0f;
-            case FADE_OUT -> Math.min(1.0f, (float) transitionTick / Math.max(1, config.fadeOutTicks()));
-            case HOLD_WAIT_SWAP -> 1.0f;
-            case FADE_IN -> Math.max(0.0f, 1.0f - ((float) transitionTick / Math.max(1, config.fadeInTicks())));
-        };
+        RoomTransitionState s = this.state;
+        if (s == RoomTransitionState.FADE_OUT) {
+            return Math.min(1.0f, (float) transitionTick / Math.max(1, config.fadeOutTicks()));
+        } else if (s == RoomTransitionState.HOLD_WAIT_SWAP) {
+            return 1.0f;
+        } else if (s == RoomTransitionState.FADE_IN) {
+            return Math.max(0.0f, 1.0f - ((float) transitionTick / Math.max(1, config.fadeInTicks())));
+        }
+        return 0.0f;
     }
 }

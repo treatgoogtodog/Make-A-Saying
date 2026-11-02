@@ -10,11 +10,15 @@ public final class ColliderComponent {
     public int offsetX;
     public int offsetY;
 
-    public ColliderComponent(int width, int height) {
+    public ColliderComponent(int width, int height, int offsetX, int offsetY) {
         this.width = width;
         this.height = height;
-        this.offsetX = -width / 2; // Bottom-center feet anchor
-        this.offsetY = 0;
+        this.offsetX = offsetX;
+        this.offsetY = offsetY;
+    }
+
+    public ColliderComponent(int width, int height) {
+        this(width, height, -width / 2, 0);
     }
 
     public ColliderComponent() {

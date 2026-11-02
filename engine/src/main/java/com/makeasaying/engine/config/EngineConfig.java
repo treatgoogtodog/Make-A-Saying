@@ -19,12 +19,15 @@ public record EngineConfig(
     int workerThreads,
     float cmPerPixel,
     int headUnitPx,
-    BodyColliderConfig bodyCollider
+    BodyColliderConfig bodyCollider,
+    String saveSlot,
+    boolean continueOnStart
 ) {
     public static final int CURRENT_VERSION = 1;
     public static final String DEFAULT_BORDER_COLOR = "#000000";
     public static final int DEFAULT_TICK_RATE = 60;
     public static final int DEFAULT_WORKER_THREADS = 2;
+    public static final String DEFAULT_SAVE_SLOT = "slot_1";
 
     public EngineConfig {
         if (borderColor == null || borderColor.isBlank()) {
@@ -34,6 +37,31 @@ public record EngineConfig(
             tickRate = DEFAULT_TICK_RATE;
         }
         workerThreads = Math.clamp(workerThreads <= 0 ? DEFAULT_WORKER_THREADS : workerThreads, 2, 4);
+        if (saveSlot == null || saveSlot.isBlank()) {
+            saveSlot = DEFAULT_SAVE_SLOT;
+        }
+    }
+
+    public EngineConfig(
+        int version,
+        int virtualWidth,
+        int virtualHeight,
+        int tileSize,
+        int windowWidth,
+        int windowHeight,
+        String windowTitle,
+        String borderColor,
+        boolean vsync,
+        int targetFps,
+        int tickRate,
+        int workerThreads,
+        float cmPerPixel,
+        int headUnitPx,
+        BodyColliderConfig bodyCollider
+    ) {
+        this(version, virtualWidth, virtualHeight, tileSize, windowWidth, windowHeight,
+            windowTitle, borderColor, vsync, targetFps, tickRate, workerThreads,
+            cmPerPixel, headUnitPx, bodyCollider, DEFAULT_SAVE_SLOT, false);
     }
 
     public EngineConfig(
@@ -53,7 +81,7 @@ public record EngineConfig(
     ) {
         this(version, virtualWidth, virtualHeight, tileSize, windowWidth, windowHeight,
             windowTitle, borderColor, vsync, targetFps, DEFAULT_TICK_RATE, DEFAULT_WORKER_THREADS,
-            cmPerPixel, headUnitPx, bodyCollider);
+            cmPerPixel, headUnitPx, bodyCollider, DEFAULT_SAVE_SLOT, false);
     }
 
     public EngineConfig(
@@ -72,7 +100,7 @@ public record EngineConfig(
     ) {
         this(version, virtualWidth, virtualHeight, tileSize, windowWidth, windowHeight,
             windowTitle, DEFAULT_BORDER_COLOR, vsync, targetFps, DEFAULT_TICK_RATE, DEFAULT_WORKER_THREADS,
-            cmPerPixel, headUnitPx, bodyCollider);
+            cmPerPixel, headUnitPx, bodyCollider, DEFAULT_SAVE_SLOT, false);
     }
 
     public record BodyColliderConfig(
@@ -101,7 +129,9 @@ public record EngineConfig(
             DEFAULT_WORKER_THREADS,
             4.5f,
             6,
-            BodyColliderConfig.defaultConfig()
+            BodyColliderConfig.defaultConfig(),
+            DEFAULT_SAVE_SLOT,
+            false
         );
     }
 }

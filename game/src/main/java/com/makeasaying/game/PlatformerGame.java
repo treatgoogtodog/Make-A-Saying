@@ -9,6 +9,8 @@ import com.makeasaying.data.input.BindingsLoader;
 import com.makeasaying.data.tuning.MovementTuningLoader;
 import com.makeasaying.data.tuning.MovementTuningWatcher;
 import com.makeasaying.data.world.RoomGridBuilder;
+import com.makeasaying.editor.core.flags.FlagDebugView;
+import com.makeasaying.editor.core.flags.FlagPanelModel;
 import com.makeasaying.editor.core.imgui.ImGuiHost;
 import com.makeasaying.editor.core.input.ImGuiInputProcessor;
 import com.makeasaying.editor.map.RoomEditor;
@@ -22,6 +24,7 @@ import com.makeasaying.engine.entity.components.ColliderComponent;
 import com.makeasaying.engine.input.ActionRegistry;
 import com.makeasaying.engine.input.Actions;
 import com.makeasaying.engine.input.ContextBindings;
+import com.makeasaying.engine.input.InputContext;
 import com.makeasaying.engine.input.InputManager;
 import com.makeasaying.engine.input.InputState;
 import com.makeasaying.engine.input.replay.InputRecorder;
@@ -73,6 +76,9 @@ public class PlatformerGame implements ApplicationListener {
     private InputRecorder recorder;
     private InputReplayer replayer;
     private ReplayData lastRecordedReplay;
+
+    private final FlagPanelModel flagPanelModel = new FlagPanelModel();
+    private final FlagDebugView flagDebugView = new FlagDebugView();
 
     private DemoSceneM5b demoScene;
 
@@ -130,6 +136,11 @@ public class PlatformerGame implements ApplicationListener {
 
         this.recorder = new InputRecorder(config.tickRate(), 12345L, "m5b_hash");
         this.demoScene = new DemoSceneM5b(movementTuning, jobs);
+        this.demoScene.setSaveSlot(config.saveSlot());
+
+        if (config.continueOnStart()) {
+            this.demoScene.loadCheckpointImmediate(config.saveSlot());
+        }
 
         Path r1Path = demoScene.getRoomsDir().resolve("test_01.json");
         this.roomEditor = new RoomEditor(
@@ -138,6 +149,7 @@ public class PlatformerGame implements ApplicationListener {
             demoScene.getRoomRenderer(),
             demoScene.getLoadedTilesets()
         );
+        this.roomEditor.getState().setFlagStore(demoScene.getFlagStore(), demoScene.getRoomStateStore());
     }
 
     @Override
@@ -210,34 +222,65 @@ public class PlatformerGame implements ApplicationListener {
             }
 
             // Handle mode toggle (F1)
+            // Mode and debug toggles
             if (globalState.isPressed(Actions.TOGGLE_EDITOR)) {
                 if (mode == GameMode.GAME) {
                     mode = GameMode.EDITOR;
+                    inputManager.getContextStack().push(InputContext.EDITOR);
                     Log.info(LogCategory.ENGINE, "Mode switched to EDITOR");
                 } else {
                     if (roomEditor.getState().isPlaying()) {
                         roomEditor.stopPlay();
                     }
                     mode = GameMode.GAME;
+                    inputManager.getContextStack().pop();
                     Log.info(LogCategory.ENGINE, "Mode switched to GAME");
                 }
+            }
+
+            if (globalState.isPressed(Actions.DEBUG_FLAGS)) {
+                flagPanelModel.toggleVisible();
+                Log.info(LogCategory.ENGINE, "Toggled flags debug panel: visible=%s", flagPanelModel.isVisible());
+            }
+
+            if (globalState.isPressed(Actions.DEBUG_LOAD_CHECKPOINT)) {
+                demoScene.startCheckpointLoad(config.saveSlot());
+                Log.info(LogCategory.ENGINE, "Initiated checkpoint load for slot '%s'", config.saveSlot());
             }
 
             if (mode == GameMode.GAME) {
                 demoScene.tick(currentTick, activeState);
             } else {
-                // In EDITOR mode: check F7 (Play) and F8 (Stop)
+                // In EDITOR mode: check F7 (Play), F8 (Stop), Ctrl+Z (Undo), Ctrl+Y (Redo)
                 if (globalState.isPressed(Actions.EDITOR_PLAY)) {
                     roomEditor.startPlay();
                 }
                 if (globalState.isPressed(Actions.EDITOR_STOP)) {
                     roomEditor.stopPlay();
                 }
+                if (activeState.isPressed(Actions.EDITOR_UNDO)) {
+                    if (roomEditor.getState().getDocument().getUndoStack().canUndo()) {
+                        roomEditor.getState().getDocument().getUndoStack().undo();
+                    }
+                }
+                if (activeState.isPressed(Actions.EDITOR_REDO)) {
+                    if (roomEditor.getState().getDocument().getUndoStack().canRedo()) {
+                        roomEditor.getState().getDocument().getUndoStack().redo();
+                    }
+                }
 
                 if (roomEditor.getState().isPlaying()) {
                     World playWorld = roomEditor.getState().getPlayWorld();
                     long playPlayerId = roomEditor.getState().getPlayPlayerId();
                     if (playWorld != null && playPlayerId != 0L) {
+                        if (demoScene.getFlagStore() != null) {
+                            demoScene.getFlagStore().applyPendingChanges(
+                                roomEditor.getState().getDocument().getId(),
+                                playWorld.getEventQueue(),
+                                currentTick
+                            );
+                        }
+
                         TileGrid playGrid = RoomGridBuilder.build(
                             roomEditor.getState().getDocument().toRoom(),
                             demoScene.getLoadedTilesets(),
@@ -259,7 +302,10 @@ public class PlatformerGame implements ApplicationListener {
                             for (RoomExit ex : roomEditor.getState().getDocument().getExits()) {
                                 if (pl < ex.x() + ex.width() && pr > ex.x() &&
                                     pbY < ex.y() + ex.height() && pt > ex.y()) {
-                                    Log.info(LogCategory.ENGINE, "Editor Play mode: Player touched exit %s (transitions disabled)", ex.id());
+                                    boolean allowed = (ex.condition() == null) ||
+                                        ex.condition().evaluate(demoScene.getFlagStore(), roomEditor.getState().getDocument().getId());
+                                    Log.info(LogCategory.ENGINE, "Editor Play mode: Player touched exit %s (conditionMet=%s, transitions disabled)",
+                                        ex.id(), allowed);
                                 }
                             }
                         }
@@ -281,6 +327,24 @@ public class PlatformerGame implements ApplicationListener {
 
             // Unbind and draw FrameBuffer centered with integer scaling to backbuffer
             virtualScreen.end();
+
+            // Render Dear ImGui debug windows if open (e.g. F2 flags)
+            if (flagPanelModel.isVisible()) {
+                int backbufferW = Gdx.graphics.getBackBufferWidth();
+                int backbufferH = Gdx.graphics.getBackBufferHeight();
+                int logicalW = Gdx.graphics.getWidth();
+                int logicalH = Gdx.graphics.getHeight();
+
+                imGuiHost.newFrame(logicalW, logicalH, backbufferW, backbufferH, frameDelta);
+                flagPanelModel.setEditable(true);
+                flagDebugView.render(
+                    flagPanelModel,
+                    demoScene.getFlagRegistry(),
+                    demoScene.getFlagStore(),
+                    demoScene.getCurrentRoom() != null ? demoScene.getCurrentRoom().id() : ""
+                );
+                imGuiHost.render();
+            }
         } else {
             // Render Dear ImGui room editor directly on GL context
             ScreenUtils.clear(0.12f, 0.12f, 0.14f, 1.0f);
@@ -292,6 +356,15 @@ public class PlatformerGame implements ApplicationListener {
 
             imGuiHost.newFrame(logicalW, logicalH, backbufferW, backbufferH, frameDelta);
             roomEditor.updateAndRender(frameDelta);
+            if (flagPanelModel.isVisible()) {
+                flagPanelModel.setEditable(roomEditor.getState().isPlaying());
+                flagDebugView.render(
+                    flagPanelModel,
+                    demoScene.getFlagRegistry(),
+                    demoScene.getFlagStore(),
+                    roomEditor.getState().getDocument().getId()
+                );
+            }
             imGuiHost.render();
         }
         long renderEnd = System.nanoTime();
@@ -334,6 +407,9 @@ public class PlatformerGame implements ApplicationListener {
     @Override
     public void dispose() {
         Log.info(LogCategory.ENGINE, "Disposing game and worker resources");
+        if (demoScene != null && demoScene.getSaveManager() != null) {
+            demoScene.getSaveManager().shutdown(2000L);
+        }
         if (jobs != null) jobs.shutdown();
         if (roomEditor != null) roomEditor.dispose();
         if (imGuiHost != null) imGuiHost.dispose();

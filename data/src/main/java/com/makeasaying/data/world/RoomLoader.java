@@ -25,7 +25,7 @@ import java.util.Map;
  * Flips row order from top-to-bottom in file to Y-up in runtime memory (DEC-007).
  */
 public final class RoomLoader {
-    public static final int CURRENT_VERSION = 2;
+    public static final int CURRENT_VERSION = 3;
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public static final MigrationChain MIGRATION_CHAIN = new MigrationChain("room", CURRENT_VERSION);
@@ -37,17 +37,100 @@ public final class RoomLoader {
                 root.putArray("exits");
             }
         });
+
+        // v2 -> v3: Add entitySeq and convert flat overrides to component-nested overrides
+        MIGRATION_CHAIN.register(2, root -> {
+            if (!root.has("entitySeq")) {
+                int max = 0;
+                if (root.has("entities") && root.get("entities").isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode entityNode : root.get("entities")) {
+                        if (entityNode.has("instanceId") && entityNode.get("instanceId").isTextual()) {
+                            String iid = entityNode.get("instanceId").asText();
+                            int idx = iid.lastIndexOf('_');
+                            if (idx >= 0 && idx < iid.length() - 1) {
+                                try {
+                                    int val = Integer.parseInt(iid.substring(idx + 1));
+                                    if (val > max) max = val;
+                                } catch (NumberFormatException ignored) {}
+                            }
+                        }
+                    }
+                }
+                root.put("entitySeq", max + 1);
+            }
+
+            if (root.has("entities") && root.get("entities").isArray()) {
+                for (com.fasterxml.jackson.databind.JsonNode entityNode : root.get("entities")) {
+                    if (entityNode instanceof com.fasterxml.jackson.databind.node.ObjectNode objEntity) {
+                        if (objEntity.has("overrides") && objEntity.get("overrides").isObject()) {
+                            com.fasterxml.jackson.databind.node.ObjectNode overridesNode = (com.fasterxml.jackson.databind.node.ObjectNode) objEntity.get("overrides");
+                            boolean isFlat = false;
+                            java.util.Iterator<String> fieldNames = overridesNode.fieldNames();
+                            while (fieldNames.hasNext()) {
+                                String field = fieldNames.next();
+                                if (!overridesNode.get(field).isObject()) {
+                                    isFlat = true;
+                                    break;
+                                }
+                            }
+                            if (isFlat) {
+                                com.fasterxml.jackson.databind.node.ObjectNode structured = objEntity.objectNode();
+                                com.fasterxml.jackson.databind.node.ObjectNode platformObj = objEntity.objectNode();
+                                java.util.Iterator<Map.Entry<String, com.fasterxml.jackson.databind.JsonNode>> fields = overridesNode.fields();
+                                while (fields.hasNext()) {
+                                    Map.Entry<String, com.fasterxml.jackson.databind.JsonNode> fieldEntry = fields.next();
+                                    if (fieldEntry.getValue().isObject()) {
+                                        structured.set(fieldEntry.getKey(), fieldEntry.getValue());
+                                    } else {
+                                        platformObj.set(fieldEntry.getKey(), fieldEntry.getValue());
+                                    }
+                                }
+                                if (structured.has("platform") && structured.get("platform").isObject()) {
+                                    com.fasterxml.jackson.databind.node.ObjectNode pNode =
+                                        (com.fasterxml.jackson.databind.node.ObjectNode) structured.get("platform");
+                                    convertLegacyPlatformCoords(pNode, objEntity);
+                                }
+                                if (!platformObj.isEmpty()) {
+                                    convertLegacyPlatformCoords(platformObj, objEntity);
+                                    structured.set("platform", platformObj);
+                                }
+                                objEntity.set("overrides", structured);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private static void convertLegacyPlatformCoords(
+        com.fasterxml.jackson.databind.node.ObjectNode platformObj,
+        com.fasterxml.jackson.databind.node.ObjectNode objEntity
+    ) {
+        int entityX = objEntity.has("x") ? objEntity.get("x").asInt() : 0;
+        int entityY = objEntity.has("y") ? objEntity.get("y").asInt() : 0;
+        if (platformObj.has("endX") && !platformObj.has("travelX")) {
+            platformObj.put("travelX", platformObj.get("endX").asInt() - entityX);
+        }
+        if (platformObj.has("endY") && !platformObj.has("travelY")) {
+            platformObj.put("travelY", platformObj.get("endY").asInt() - entityY);
+        }
+        platformObj.remove("startX");
+        platformObj.remove("startY");
+        platformObj.remove("endX");
+        platformObj.remove("endY");
     }
 
     private RoomLoader() {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"version", "id", "width", "height", "tilesets", "layers", "spawnPoints", "entities", "exits"})
+    @JsonPropertyOrder({"version", "id", "width", "height", "entitySeq", "tilesets", "layers", "spawnPoints", "entities", "exits"})
     public record RoomData(
         int version,
         String id,
         int width,
         int height,
+        int entitySeq,
         List<TilesetAliasData> tilesets,
         Map<String, List<String>> layers,
         List<SpawnPointData> spawnPoints,
@@ -62,9 +145,45 @@ public final class RoomLoader {
             List<TilesetAliasData> tilesets,
             Map<String, List<String>> layers,
             List<SpawnPointData> spawnPoints,
+            List<EntityInstanceData> entities,
+            List<RoomExitData> exits
+        ) {
+            this(version, id, width, height, computeDefaultSeq(entities), tilesetAliases(tilesets), layers, spawnPoints, entities, exits);
+        }
+
+        public RoomData(
+            int version,
+            String id,
+            int width,
+            int height,
+            List<TilesetAliasData> tilesets,
+            Map<String, List<String>> layers,
+            List<SpawnPointData> spawnPoints,
             List<EntityInstanceData> entities
         ) {
-            this(version, id, width, height, tilesets, layers, spawnPoints, entities, Collections.emptyList());
+            this(version, id, width, height, computeDefaultSeq(entities), tilesets, layers, spawnPoints, entities, Collections.emptyList());
+        }
+
+        private static List<TilesetAliasData> tilesetAliases(List<TilesetAliasData> tilesets) {
+            return tilesets;
+        }
+
+        private static int computeDefaultSeq(List<EntityInstanceData> entities) {
+            int max = 0;
+            if (entities != null) {
+                for (EntityInstanceData ed : entities) {
+                    if (ed == null || ed.instanceId() == null) continue;
+                    String iid = ed.instanceId();
+                    int idx = iid.lastIndexOf('_');
+                    if (idx >= 0 && idx < iid.length() - 1) {
+                        try {
+                            int val = Integer.parseInt(iid.substring(idx + 1));
+                            if (val > max) max = val;
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+            }
+            return max + 1;
         }
     }
 
@@ -77,7 +196,7 @@ public final class RoomLoader {
     public record SpawnPointData(String id, int x, int y) {}
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"id", "x", "y", "width", "height", "targetRoom", "targetSpawn"})
+    @JsonPropertyOrder({"id", "x", "y", "width", "height", "targetRoom", "targetSpawn", "condition"})
     public record RoomExitData(
         String id,
         int x,
@@ -85,31 +204,58 @@ public final class RoomLoader {
         @com.fasterxml.jackson.annotation.JsonProperty("width") @com.fasterxml.jackson.annotation.JsonAlias({"w"}) int width,
         @com.fasterxml.jackson.annotation.JsonProperty("height") @com.fasterxml.jackson.annotation.JsonAlias({"h"}) int height,
         String targetRoom,
-        String targetSpawn
-    ) {}
+        String targetSpawn,
+        com.fasterxml.jackson.databind.JsonNode condition
+    ) {
+        public RoomExitData(
+            String id,
+            int x,
+            int y,
+            int width,
+            int height,
+            String targetRoom,
+            String targetSpawn
+        ) {
+            this(id, x, y, width, height, targetRoom, targetSpawn, null);
+        }
+    }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    @JsonPropertyOrder({"instanceId", "definition", "x", "y", "overrides"})
+    @JsonPropertyOrder({"instanceId", "definition", "x", "y", "overrides", "spawnCondition"})
     public record EntityInstanceData(
         String instanceId,
         String definition,
         int x,
         int y,
-        Map<String, Object> overrides
-    ) {}
+        Map<String, Map<String, Object>> overrides,
+        com.fasterxml.jackson.databind.JsonNode spawnCondition
+    ) {
+        public EntityInstanceData(
+            String instanceId,
+            String definition,
+            int x,
+            int y,
+            Map<String, Map<String, Object>> overrides
+        ) {
+            this(instanceId, definition, x, y, overrides, null);
+        }
+    }
 
     public static Room load(Path path) throws IOException {
+        return load(path, null, null);
+    }
+
+    public static RoomData loadData(Path path) throws IOException {
         if (!Files.exists(path)) {
             Log.error(LogCategory.DATA, "Room file not found: %s", path.toAbsolutePath());
             throw new IllegalArgumentException("Room file not found: " + path);
         }
 
-        RoomData data;
         try {
             com.fasterxml.jackson.databind.JsonNode rootNode = MAPPER.readTree(path.toFile());
             if (rootNode instanceof com.fasterxml.jackson.databind.node.ObjectNode objectNode) {
                 MIGRATION_CHAIN.migrate(objectNode);
-                data = MAPPER.treeToValue(objectNode, RoomData.class);
+                return MAPPER.treeToValue(objectNode, RoomData.class);
             } else {
                 throw new IOException("Root of room file must be a JSON object: " + path);
             }
@@ -119,11 +265,26 @@ public final class RoomLoader {
             if (e instanceof IllegalArgumentException iae) throw iae;
             throw new IOException("Malformed room file: " + path, e);
         }
+    }
 
-        return fromData(data);
+    public static Room load(
+        Path path,
+        com.makeasaying.engine.flags.FlagRegistry flagRegistry,
+        com.makeasaying.engine.condition.AtomRegistry atomRegistry
+    ) throws IOException {
+        RoomData data = loadData(path);
+        return fromData(data, flagRegistry, atomRegistry);
     }
 
     public static Room fromData(RoomData data) {
+        return fromData(data, null, null);
+    }
+
+    public static Room fromData(
+        RoomData data,
+        com.makeasaying.engine.flags.FlagRegistry flagRegistry,
+        com.makeasaying.engine.condition.AtomRegistry atomRegistry
+    ) {
         if (data.version() > CURRENT_VERSION) {
             throw new IllegalArgumentException("Unknown newer room version: " + data.version());
         }
@@ -175,15 +336,27 @@ public final class RoomLoader {
         List<RoomEntityData> entities = new ArrayList<>();
         if (data.entities() != null) {
             for (EntityInstanceData ed : data.entities()) {
-                entities.add(new RoomEntityData(ed.instanceId(), ed.definition(), ed.x(), ed.y(), ed.overrides()));
+                com.makeasaying.engine.condition.CompiledCondition cond =
+                    (ed.spawnCondition() != null && flagRegistry != null)
+                        ? com.makeasaying.data.condition.ConditionLoader.parse(
+                            ed.spawnCondition(), flagRegistry, atomRegistry != null ? atomRegistry : new com.makeasaying.engine.condition.AtomRegistry())
+                        : com.makeasaying.engine.condition.CompiledCondition.ALWAYS_TRUE;
+                String condJson = (ed.spawnCondition() != null && !ed.spawnCondition().isNull()) ? ed.spawnCondition().toString() : null;
+                entities.add(new RoomEntityData(ed.instanceId(), ed.definition(), ed.x(), ed.y(), ed.overrides(), cond, condJson));
             }
         }
 
         List<com.makeasaying.engine.world.RoomExit> exits = new ArrayList<>();
         if (data.exits() != null) {
             for (RoomExitData ed : data.exits()) {
+                com.makeasaying.engine.condition.CompiledCondition cond =
+                    (ed.condition() != null && flagRegistry != null)
+                        ? com.makeasaying.data.condition.ConditionLoader.parse(
+                            ed.condition(), flagRegistry, atomRegistry != null ? atomRegistry : new com.makeasaying.engine.condition.AtomRegistry())
+                        : com.makeasaying.engine.condition.CompiledCondition.ALWAYS_TRUE;
+                String condJson = (ed.condition() != null && !ed.condition().isNull()) ? ed.condition().toString() : null;
                 exits.add(new com.makeasaying.engine.world.RoomExit(
-                    ed.id(), ed.x(), ed.y(), ed.width(), ed.height(), ed.targetRoom(), ed.targetSpawn()
+                    ed.id(), ed.x(), ed.y(), ed.width(), ed.height(), ed.targetRoom(), ed.targetSpawn(), cond, condJson
                 ));
             }
         }
@@ -192,6 +365,7 @@ public final class RoomLoader {
             data.id(),
             width,
             height,
+            data.entitySeq(),
             aliasMap,
             layerMap,
             spawnPoints,
@@ -236,17 +410,30 @@ public final class RoomLoader {
 
         List<EntityInstanceData> entityData = new ArrayList<>();
         for (RoomEntityData ed : room.entities()) {
+            com.fasterxml.jackson.databind.JsonNode scNode = null;
+            if (ed.spawnConditionJson() != null && !ed.spawnConditionJson().isBlank()) {
+                try {
+                    scNode = MAPPER.readTree(ed.spawnConditionJson());
+                } catch (Exception ignored) {}
+            }
             entityData.add(new EntityInstanceData(
                 ed.instanceId(),
                 ed.definition(),
                 ed.x(),
                 ed.y(),
-                ed.overrides().isEmpty() ? null : ed.overrides()
+                ed.overrides().isEmpty() ? null : ed.overrides(),
+                scNode
             ));
         }
 
         List<RoomExitData> exitData = new ArrayList<>();
         for (com.makeasaying.engine.world.RoomExit exit : room.exits()) {
+            com.fasterxml.jackson.databind.JsonNode cNode = null;
+            if (exit.conditionJson() != null && !exit.conditionJson().isBlank()) {
+                try {
+                    cNode = MAPPER.readTree(exit.conditionJson());
+                } catch (Exception ignored) {}
+            }
             exitData.add(new RoomExitData(
                 exit.id(),
                 exit.x(),
@@ -254,7 +441,8 @@ public final class RoomLoader {
                 exit.width(),
                 exit.height(),
                 exit.targetRoom(),
-                exit.targetSpawn()
+                exit.targetSpawn(),
+                cNode
             ));
         }
 
@@ -263,6 +451,7 @@ public final class RoomLoader {
             room.id(),
             width,
             height,
+            room.entitySeq(),
             tilesetEntries,
             layersData,
             spawnData,

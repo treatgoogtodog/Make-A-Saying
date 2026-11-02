@@ -29,6 +29,8 @@ This document defines all file formats used in the project, their schemas, units
   - `targetFps` (int, optional): Target frame rate (default `60`).
   - `tickRate` (int, optional): Fixed-timestep simulation tick rate in ticks/second (default `60`).
   - `workerThreads` (int, optional): Background worker pool size, clamped between 2 and 4 (default `2`).
+  - `saveSlot` (int, optional): Default save slot index to target (default `0`).
+  - `continueOnStart` (bool, optional): If true and a valid checkpoint exists for `saveSlot`, the game launches directly into that checkpoint room and savepoint (default `false`).
 
 ---
 
@@ -144,9 +146,9 @@ This document defines all file formats used in the project, their schemas, units
 
 ## Room Format (`content/rooms/<id>.json`)
 - **Location**: `content/rooms/<id>.json`
-- **Current Version**: `2`
+- **Current Version**: `3`
 - **Fields**:
-  - `version` (int, required): File format version (`2`).
+  - `version` (int, required): File format version (`3`).
   - `id` (string, required): Stable ASCII room ID (`^[a-z0-9_.]+$`).
   - `width` (int, required): Width of room in tiles.
   - `height` (int, required): Height of room in tiles.
@@ -162,12 +164,13 @@ This document defines all file formats used in the project, their schemas, units
     - `id` (string, required): Stable spawn ID (`^[a-z0-9_.]+$`).
     - `x` (int, required): Horizontal position in virtual pixels (feet).
     - `y` (int, required): Vertical position in virtual pixels (feet).
+  - `entitySeq` (int, required, added in v3): Monotonic instance ID sequence counter. Next allocated instance ID within the room uses `<def>_<entitySeq>`, then increments `entitySeq`.
   - `entities` (list of objects, required):
-    - `instanceId` (string, required): Stable entity instance ID.
-    - `definition` (string, required): Entity definition ID.
+    - `instanceId` (string, required): Stable entity instance ID (`^[a-z0-9_.]+$`).
+    - `definition` (string, required): Entity definition ID (`^[a-z0-9_.]+$`).
     - `x` (int, required): Spawn pixel X.
     - `y` (int, required): Spawn pixel Y.
-    - `overrides` (map of string -> object, optional): Component property overrides.
+    - `overrides` (map of string -> object, optional): Component property overrides, structured by component ID: `{ "<componentId>": { "<field>": value } }`.
   - `exits` (list of objects, added in v2):
     - `id` (string, required): Stable exit zone ID (`^[a-z0-9_.]+$`).
     - `x` (int, required): Bottom-left pixel X in room space (Y-up).
@@ -179,11 +182,12 @@ This document defines all file formats used in the project, their schemas, units
 
 ### Migration Path
 - `v1 -> v2`: If the `"exits"` array is missing, `MigrationChain` automatically inserts an empty array `"exits": []`.
+- `v2 -> v3`: Computes `entitySeq = max(suffixes) + 1` across existing `entities` (defaults to 1 if empty). Migrates any legacy flat overrides in `entities` into structured component-nested maps (e.g. `{ "speed": 60 }` -> `{ "platform": { "speed": 60 } }`).
 
-### Example Room JSON (v2)
+### Example Room JSON (v3)
 ```json
 {
-  "version": 2,
+  "version": 3,
   "id": "test_01",
   "width": 40,
   "height": 12,
@@ -206,7 +210,23 @@ This document defines all file formats used in the project, their schemas, units
       "y": 16
     }
   ],
-  "entities": [],
+  "entitySeq": 3,
+  "entities": [
+    {
+      "instanceId": "moving_platform_1",
+      "definition": "moving_platform",
+      "x": 160,
+      "y": 64,
+      "overrides": {
+        "platform": {
+          "travelX": 96,
+          "travelY": 0,
+          "speed": 40.0,
+          "pauseTicks": 30
+        }
+      }
+    }
+  ],
   "exits": [
     {
       "id": "to_test_02",
@@ -223,11 +243,55 @@ This document defines all file formats used in the project, their schemas, units
 
 ---
 
+## Entity Definition Format (`content/entities/<id>.json`)
+- **Location**: `content/entities/<id>.json`
+- **Current Version**: `1`
+- **Fields**:
+  - `version` (int, required): File format version (`1`).
+  - `id` (string, required): Stable ASCII definition ID (`^[a-z0-9_.]+$`).
+  - `placeable` (bool, required): Whether editor palette exposes this definition for level placement.
+  - `components` (map of string -> object, required): Default component payloads keyed by component schema ID (e.g. `"body"`, `"collider"`, `"platform"`).
+
+### Example Entity Definition JSON
+```json
+{
+  "version": 1,
+  "id": "moving_platform",
+  "placeable": true,
+  "components": {
+    "body": {
+      "x": 0.0,
+      "y": 0.0,
+      "vx": 0.0,
+      "vy": 0.0
+    },
+    "collider": {
+      "width": 32,
+      "height": 8,
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    "platform": {
+      "travelX": 64,
+      "travelY": 0,
+      "speed": 30.0,
+      "pauseTicks": 30,
+      "riderBehavior": "BLOCK"
+    }
+  }
+}
+```
+
+---
+
 ## Room Transition Configuration (`RoomTransitionConfig`)
 - `fadeOutTicks` (int, default `12`): Duration in simulation ticks for fading out to black.
 - `holdTicks` (int, default `4`): Minimum duration in simulation ticks to hold black before swap.
+- `swapTick` (int, default `1`): Exact tick at hold expiration where room data is swapped and player is relocated.
 - `fadeInTicks` (int, default `12`): Duration in simulation ticks for fading back in.
-- **Total Standard Duration**: 28 simulation ticks (roughly 0.47 seconds at 60 Hz).
+- **Total Standard Duration**: 29 simulation ticks (12 + 4 + 1 + 12).
+- First active simulation tick in new room occurs at tick 30.
+- Safe-valve timeout: Monotonic clock with 10.0-second timeout in waiting path.
 
 ---
 
@@ -242,10 +306,75 @@ The generator source code is maintained in `data/src/test/java/com/makeasaying/d
 ---
 
 ## Atomic Save File Format Protocol (M6a / DEC-023)
-- Path: `content/rooms/*.json` and future saves in OS per-user data directory.
+- Path: `content/rooms/*.json` and checkpoint saves in OS per-user data directory.
 - Protocol:
   1. Writes serialized JSON payload with 2-space indentation and trailing LF to `<target>.tmp`.
   2. Forces disk sync via `FileChannel.force(true)`.
   3. If previous file exists at `<target>`, copies it to `<target>.bak` (`REPLACE_EXISTING`).
   4. Atomically renames `<target>.tmp` to `<target>` (`ATOMIC_MOVE` with fallback to `REPLACE_EXISTING`).
   5. Cleans up temporary file on failure.
+
+---
+
+## Checkpoint Save File Format (`save_slot_<slot>.json`)
+- **Location**: OS per-user data directory (`<user.home>/.makeasaying/saves/save_slot_<slot>.json` or configurable directory)
+- **Current Version**: `1`
+- **Envelope Structure**:
+  - `version` (int, required): Envelope and data format version (`1`).
+  - `playtimeTicks` (long, required): Total simulation ticks elapsed up to save time.
+  - `timestampUtc` (string, required): ISO-8601 UTC timestamp string (e.g. `"2026-11-02T09:00:00Z"`).
+  - `currentRoomId` (string, required): Stable ASCII ID of active room.
+  - `savepointInstanceId` (string, required): Stable ASCII instance ID of savepoint entity in active room where save was made.
+  - `checksum` (string, required): SHA-256 hexadecimal digest computed over canonical JSON representation of `payload`.
+  - `payload` (object, required): Payload data subject to checksum validation.
+- **Payload Structure**:
+  - `globalFlags` (map of string -> object): Map of registered global flag IDs to their primitive (bool, int) or enum string values. Enums are serialized as names, never ordinals.
+  - `roomRecords` (map of string -> map of string -> object): Map of room IDs to their persistent room records (`type` string and `value`).
+  - `reservedSections` (object): Forward-compatibility sections (`player`, `bag`, `keychain`, `stash`, `seenCutscenes`). Preserved byte-for-byte during round-trip loads/saves.
+
+### Example Checkpoint Save JSON
+```json
+{
+  "version": 1,
+  "playtimeTicks": 7200,
+  "timestampUtc": "2026-11-02T09:00:00Z",
+  "currentRoomId": "test_01",
+  "savepointInstanceId": "savepoint_3",
+  "checksum": "a8f3b...",
+  "payload": {
+    "globalFlags": {
+      "boss_defeated": false,
+      "chapter_number": 1,
+      "difficulty": "NORMAL"
+    },
+    "roomRecords": {
+      "test_01": {
+        "chest_opened": {
+          "type": "BOOL",
+          "value": true
+        }
+      }
+    },
+    "reservedSections": {
+      "player": {},
+      "bag": {},
+      "keychain": {},
+      "stash": {},
+      "seenCutscenes": []
+    }
+  }
+}
+```
+
+---
+
+## Savepoint Entity Definition (`content/entities/savepoint.json`)
+- **Location**: `content/entities/savepoint.json`
+- **Current Version**: `1`
+- **Fields**:
+  - `id`: `"savepoint"`
+  - `placeable`: `true`
+  - `components`:
+    - `collider`: `{ "width": 16, "height": 24, "offsetX": -8, "offsetY": 0, "isTrigger": true }`
+    - `tags`: `{ "tags": ["savepoint"] }`
+

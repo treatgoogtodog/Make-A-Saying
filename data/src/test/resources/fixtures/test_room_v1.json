@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "id": "fixture_v1",
+  "width": 20,
+  "height": 10,
+  "tilesets": [
+    {
+      "alias": "a",
+      "id": "test_area"
+    }
+  ],
+  "layers": {
+    "main": [
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      ". . . . . . . . . . . . . . . . . . . .",
+      "a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01 a:solid_01"
+    ]
+  },
+  "spawnPoints": [
+    {
+      "id": "start",
+      "x": 16,
+      "y": 16
+    }
+  ],
+  "entities": []
+}

@@ -26,6 +26,8 @@ public final class InputManager extends InputAdapter {
     private final boolean[] physicallyHeldKeys = new boolean[MAX_KEY_CODE];
     private final boolean[] swallowedKeys = new boolean[MAX_KEY_CODE];
     private final boolean[] transitionedThisTick = new boolean[MAX_KEY_CODE];
+    private final String[] activeGlobalActionPerKey = new String[MAX_KEY_CODE];
+    private final String[] activeContextActionPerKey = new String[MAX_KEY_CODE];
 
     public InputManager(ActionRegistry registry, ContextBindings bindings, InputContextStack contextStack) {
         this.registry = registry;
@@ -113,17 +115,47 @@ public final class InputManager extends InputAdapter {
                     swallowedKeys[keycode] = false;
                 }
 
+                // Compute modifier mask from held keys
+                int modMask = 0;
+                if (physicallyHeldKeys[com.badlogic.gdx.Input.Keys.CONTROL_LEFT] || physicallyHeldKeys[com.badlogic.gdx.Input.Keys.CONTROL_RIGHT]) {
+                    modMask |= KeyNames.MOD_CTRL;
+                }
+                if (physicallyHeldKeys[com.badlogic.gdx.Input.Keys.SHIFT_LEFT] || physicallyHeldKeys[com.badlogic.gdx.Input.Keys.SHIFT_RIGHT]) {
+                    modMask |= KeyNames.MOD_SHIFT;
+                }
+                if (physicallyHeldKeys[com.badlogic.gdx.Input.Keys.ALT_LEFT] || physicallyHeldKeys[com.badlogic.gdx.Input.Keys.ALT_RIGHT]) {
+                    modMask |= KeyNames.MOD_ALT;
+                }
+
                 // 1. Process global bindings (always active, independent of context)
-                String globalAction = bindings.getActionForKey(InputContext.GLOBAL, keycode);
-                if (globalAction != null) {
-                    globalState.setButtonDown(globalAction, isDown);
+                if (isDown) {
+                    String globalAction = bindings.getActionForInput(InputContext.GLOBAL, keycode, modMask);
+                    activeGlobalActionPerKey[keycode] = globalAction;
+                    if (globalAction != null) {
+                        globalState.setButtonDown(globalAction, true);
+                    }
+                } else {
+                    String globalAction = activeGlobalActionPerKey[keycode];
+                    if (globalAction != null) {
+                        globalState.setButtonDown(globalAction, false);
+                        activeGlobalActionPerKey[keycode] = null;
+                    }
                 }
 
                 // 2. Process active context bindings (if not swallowed or externally captured)
-                if (!swallowedKeys[keycode] && !externalCaptured) {
-                    String action = bindings.getActionForKey(activeContext, keycode);
+                if (isDown) {
+                    if (!swallowedKeys[keycode] && !externalCaptured) {
+                        String action = bindings.getActionForInput(activeContext, keycode, modMask);
+                        activeContextActionPerKey[keycode] = action;
+                        if (action != null) {
+                            state.setButtonDown(action, true);
+                        }
+                    }
+                } else {
+                    String action = activeContextActionPerKey[keycode];
                     if (action != null) {
-                        state.setButtonDown(action, isDown);
+                        state.setButtonDown(action, false);
+                        activeContextActionPerKey[keycode] = null;
                     }
                 }
             } else {

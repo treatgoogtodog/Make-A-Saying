@@ -23,12 +23,18 @@ Per Section 7.2 and 7.3 of `AGENTS.md`, systems in the engine run in a fixed, do
 6. **Combat**: Hurtbox / Hitbox overlap, damage calculations, recoil impulses.
 7. **Death System**: State machine transitions (`CEASE` -> `COLLAPSE` / `FALLING` -> `LANDED` -> `RESOLVE`), slope checks, emits `entity_died`.
 8. **Triggers and Zones**:
-   - Overlap checks for triggers, camera bounds, and room exits (`RoomExit`).
+   - **FlagStore Drain**: Drains all pending flag changes accumulated during AI, platforms, movement, combat, and death in queue order. Applied values update scope storage (GLOBAL, SESSION, ROOM) with last-write-wins; emits `FLAG_CHANGED` events to the event queue. Reads during the tick see applied values only.
+   - **Savepoint Interaction (`SavepointSystem`)**:
+     - Evaluates player body collider against active room entities tagged `"savepoint"` using non-allocating entity iteration.
+     - When overlapping and `"interact"` is pressed, dispatches `SaveManager.requestSave(savepointInstanceId, currentRoomId, playtimeTicks, globalFlags, roomRecords)`.
+     - Save requests while a worker write is in flight are queued (latest request replaces pending) and executed on worker completion, ensuring simulation determinism and zero per-tick allocation regardless of I/O speed.
+   - Overlap checks for triggers, camera bounds, and room exits (`RoomExit`). Exits evaluate their `condition` against the active `FlagStore` and room ID; closed exits are not triggered.
    - Re-arms disabled exits once player collider clears their bounds.
    - Advances `RoomTransitionManager` (`IDLE` -> `FADE_OUT` -> `HOLD_WAIT_SWAP` -> `FADE_IN`).
    - When transition is active, entity systems (AI, platforms, movement) are frozen while input layer keeps recording and draining.
-   - At swap point in `HOLD_WAIT_SWAP`, if target room is ready, executes atomic room swap: despawns room-local entities, resets player kinematics and jump state, recomputes grounded on target grid, disables arrival exit, and increments `visited` in `RoomStateStore`. If target room is not ready, tick advance is suspended, delta discarded, and Jobs drained until ready.
-9. **Event Dispatch**: Deterministic processing of tick event queue with cascade limit.
+   - At swap point in `HOLD_WAIT_SWAP`, if target room is ready, executes atomic room swap: clears `ROOM_TEMP` flags silently (logged with `ROOM_SWAP` source), despawns room-local entities, resets player kinematics and jump state, recomputes grounded on target grid, disables arrival exit, and increments `visited` in `RoomStateStore`. If target room is not ready, tick advance is suspended, delta discarded, and Jobs drained until ready.
+   - Checkpoint reload transition executes the exact same 29-tick sequence (12 fade out, 4 hold, 1 swap, 12 fade in) after full pre-fade validation on worker, executing the 6-step atomic state restoration at swap tick 17.
+9. **Event Dispatch**: Deterministic processing of tick event queue with cascade limit. Emits and dispatches `FLAG_CHANGED`, `ENTITY_DIED`, `LANDED`, etc.
 10. **Animation Advance**: Advances tick-based `Animator` components and produces frame events.
 11. **Deferred Spawn / Despawn**: Entity lifecycle changes deferred to the very end of the tick.
 

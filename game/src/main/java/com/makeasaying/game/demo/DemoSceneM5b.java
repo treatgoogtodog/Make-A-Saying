@@ -6,6 +6,10 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.Disposable;
+import com.makeasaying.data.entity.EntityDefinitionLoader;
+import com.makeasaying.data.flags.FlagDefinitionLoader;
+import com.makeasaying.data.save.PerUserSaveLocation;
+import com.makeasaying.data.save.SaveManager;
 import com.makeasaying.data.world.RoomCache;
 import com.makeasaying.data.world.RoomGridBuilder;
 import com.makeasaying.data.world.RoomLoader;
@@ -13,6 +17,9 @@ import com.makeasaying.data.world.RoomWatcher;
 import com.makeasaying.data.world.TilesetLoader;
 import com.makeasaying.engine.async.Jobs;
 import com.makeasaying.engine.entity.ControlSource;
+import com.makeasaying.engine.entity.EntityDefinition;
+import com.makeasaying.engine.entity.EntityId;
+import com.makeasaying.engine.entity.EntitySpawner;
 import com.makeasaying.engine.entity.MovementTuning;
 import com.makeasaying.engine.entity.TileGrid;
 import com.makeasaying.engine.entity.World;
@@ -24,17 +31,25 @@ import com.makeasaying.engine.entity.components.InputStateComponent;
 import com.makeasaying.engine.entity.components.JumpStateComponent;
 import com.makeasaying.engine.entity.components.PlatformComponent;
 import com.makeasaying.engine.entity.components.RoomScopeComponent;
+import com.makeasaying.engine.entity.components.SavepointComponent;
 import com.makeasaying.engine.entity.systems.MovementSystem;
 import com.makeasaying.engine.entity.systems.PlatformSystem;
 import com.makeasaying.engine.entity.systems.PlayerControlSystem;
+import com.makeasaying.engine.entity.systems.SavepointSystem;
+import com.makeasaying.engine.flags.FlagRegistry;
+import com.makeasaying.engine.flags.FlagStore;
 import com.makeasaying.engine.input.InputState;
 import com.makeasaying.engine.render.Camera;
 import com.makeasaying.engine.render.DefaultTextureProvider;
 import com.makeasaying.engine.render.RoomRenderer;
 import com.makeasaying.engine.render.Snap;
+import com.makeasaying.engine.save.SaveEnvelope;
+import com.makeasaying.engine.save.SavePayload;
+import com.makeasaying.engine.schema.ComponentSchemaRegistry;
 import com.makeasaying.engine.util.Log;
 import com.makeasaying.engine.util.LogCategory;
 import com.makeasaying.engine.world.Room;
+import com.makeasaying.engine.world.RoomEntityData;
 import com.makeasaying.engine.world.RoomExit;
 import com.makeasaying.engine.world.RoomLayerType;
 import com.makeasaying.engine.world.RoomStateStore;
@@ -77,13 +92,26 @@ public final class DemoSceneM5b implements Disposable {
     private final RoomStateStore roomStateStore = new RoomStateStore();
     private final RoomTransitionManager transitionManager = new RoomTransitionManager();
 
+    private FlagRegistry flagRegistry;
+    private FlagStore flagStore;
+
     private final Map<String, Tileset> loadedTilesets = new LinkedHashMap<>();
     private final Map<String, TileGrid> roomGrids = new HashMap<>();
+    private final Map<String, EntityDefinition> entityDefs = new LinkedHashMap<>();
+    private final ComponentSchemaRegistry schemaRegistry = ComponentSchemaRegistry.createDefault();
+    private final EntitySpawner spawner = new EntitySpawner(schemaRegistry);
 
     private Room currentRoom;
     private TileGrid currentGrid;
     private RoomRenderer roomRenderer;
     private RoomWatcher roomWatcher;
+
+    private final SavepointSystem savepointSystem = new SavepointSystem();
+    private SaveManager saveManager;
+    private String saveSlot = "slot_1";
+    private String lastSaveNotice = null;
+    private int saveNoticeTicks = 0;
+    private Texture savepointTexture;
 
     private Texture tilesetTextureA;
     private Texture tilesetTextureB;
@@ -107,6 +135,7 @@ public final class DemoSceneM5b implements Disposable {
 
         findContentDirs();
         loadInitialContent();
+        this.saveManager = new SaveManager(PerUserSaveLocation.defaultLocation(), flagRegistry, jobs);
         spawnPlayer();
         spawnRoomLocalEntities();
         initRenderResources();
@@ -140,6 +169,35 @@ public final class DemoSceneM5b implements Disposable {
         } catch (IOException e) {
             Log.error(LogCategory.DATA, "Failed loading tilesets: %s", e, e.getMessage());
         }
+
+        Path entDir = Path.of("content/entities");
+        if (!Files.exists(entDir)) entDir = Path.of("..", "content/entities");
+        if (Files.exists(entDir)) {
+            try (var stream = Files.list(entDir)) {
+                for (Path p : stream.filter(p -> p.toString().endsWith(".json")).toList()) {
+                    try {
+                        EntityDefinition def = EntityDefinitionLoader.load(p, schemaRegistry);
+                        entityDefs.put(def.id(), def);
+                    } catch (Exception e) {
+                        Log.error(LogCategory.DATA, "Failed loading definition %s: %s", p, e.getMessage());
+                    }
+                }
+            } catch (IOException ignored) {}
+        }
+
+        Path flagsPath = Path.of("content/flags.json");
+        if (!Files.exists(flagsPath)) flagsPath = Path.of("..", "content/flags.json");
+        if (Files.exists(flagsPath)) {
+            try {
+                this.flagRegistry = FlagDefinitionLoader.load(flagsPath);
+            } catch (Exception e) {
+                Log.error(LogCategory.DATA, "Failed loading flags from %s: %s", flagsPath, e.getMessage());
+                this.flagRegistry = new FlagRegistry(java.util.Collections.emptyList());
+            }
+        } else {
+            this.flagRegistry = new FlagRegistry(java.util.Collections.emptyList());
+        }
+        this.flagStore = new FlagStore(flagRegistry, roomStateStore);
 
         try {
             Path r1Path = roomsDir.resolve("test_01.json");
@@ -182,27 +240,14 @@ public final class DemoSceneM5b implements Disposable {
     }
 
     private void spawnRoomLocalEntities() {
-        if ("test_01".equals(currentRoom.id())) {
-            // Horizontal moving platform (160 -> 208)
-            long horizId = world.createEntity();
-            world.setPlatform(horizId, new PlatformComponent(
-                280, 48, 360, 48, 32, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
-            ));
-            world.setRoomScope(horizId, new RoomScopeComponent(RoomScopeComponent.Scope.ROOM_LOCAL));
-
-            // Vertical moving platform (480, 24 -> 72)
-            long vertId = world.createEntity();
-            world.setPlatform(vertId, new PlatformComponent(
-                512, 32, 512, 96, 32, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
-            ));
-            world.setRoomScope(vertId, new RoomScopeComponent(RoomScopeComponent.Scope.ROOM_LOCAL));
-        } else if ("test_02".equals(currentRoom.id())) {
-            // Platform in room 2
-            long pId = world.createEntity();
-            world.setPlatform(pId, new PlatformComponent(
-                120, 40, 184, 40, 32, 8, 1.0f, 15, PlatformComponent.CrushMode.BLOCK
-            ));
-            world.setRoomScope(pId, new RoomScopeComponent(RoomScopeComponent.Scope.ROOM_LOCAL));
+        for (RoomEntityData ed : currentRoom.entities()) {
+            if (ed.spawnCondition() != null && !ed.spawnCondition().evaluate(flagStore, currentRoom.id())) {
+                continue;
+            }
+            EntityDefinition def = entityDefs.get(ed.definition());
+            if (def != null) {
+                spawner.spawn(world, def, ed.instanceId(), ed.x(), ed.y(), ed.overrides());
+            }
         }
         world.applyDeferredLifecycle();
     }
@@ -238,6 +283,14 @@ public final class DemoSceneM5b implements Disposable {
         platformTexture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         platMap.dispose();
 
+        // 16x24 teal savepoint placeholder (#00ffaa)
+        Pixmap spMap = new Pixmap(16, 24, Pixmap.Format.RGBA8888);
+        spMap.setColor(Color.valueOf("#00ffaa"));
+        spMap.fill();
+        savepointTexture = new Texture(spMap);
+        savepointTexture.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        spMap.dispose();
+
         // 1x1 white pixel for debug shapes & fade overlay
         Pixmap debugPixel = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
         debugPixel.setColor(Color.WHITE);
@@ -259,6 +312,7 @@ public final class DemoSceneM5b implements Disposable {
                 playerId,
                 world,
                 currentRoom,
+                flagStore,
                 () -> transitionManager.getPendingExit() != null && roomCache.get(transitionManager.getPendingExit().targetRoom()) != null,
                 this::performRoomSwap
             );
@@ -266,11 +320,17 @@ public final class DemoSceneM5b implements Disposable {
     }
 
     public void tick(long currentTick, InputState playerInput) {
+        // Step 8: Apply pending flag changes before triggers and zones
+        if (flagStore != null && currentRoom != null) {
+            flagStore.applyPendingChanges(currentRoom.id(), world.getEventQueue(), currentTick);
+        }
+
         // 1. Update transition state machine
         boolean advanceTick = transitionManager.update(
             playerId,
             world,
             currentRoom,
+            flagStore,
             () -> roomCache.isCached(transitionManager.getPendingExit() != null ? transitionManager.getPendingExit().targetRoom() : ""),
             exit -> performRoomSwap(exit)
         );
@@ -278,6 +338,10 @@ public final class DemoSceneM5b implements Disposable {
         if (!advanceTick) {
             // Tick advance is suspended while waiting for worker preload
             return;
+        }
+
+        if (saveNoticeTicks > 0) {
+            saveNoticeTicks--;
         }
 
         // When transition is active, entity systems are frozen
@@ -290,6 +354,23 @@ public final class DemoSceneM5b implements Disposable {
 
             // 5. Movement and Collision
             movementSystem.update(world, currentGrid);
+
+            // 8. Triggers and Zones: Savepoint interaction
+            savepointSystem.update(world, currentTick, false, transitionManager.isTransitionActive(), (spId, sx, sy) -> {
+                SavePayload payload = new SavePayload(
+                    currentTick,
+                    saveManager.getClock().nowUtc(),
+                    currentRoom.id(),
+                    spId,
+                    flagStore.exportGlobalFlags(),
+                    roomStateStore.exportRoomRecords(),
+                    java.util.Collections.emptyMap()
+                );
+                saveManager.requestSave(saveSlot, payload, success -> {
+                    lastSaveNotice = "Game Saved!";
+                    saveNoticeTicks = 120;
+                });
+            });
         }
 
         // Update camera position clamped to active room bounds
@@ -355,6 +436,95 @@ public final class DemoSceneM5b implements Disposable {
             currentRoom.id(), exit.targetSpawn(), roomStateStore.getInt(currentRoom.id(), "visited", 0));
     }
 
+    public void startCheckpointLoad(String slot) {
+        if (transitionManager.isTransitionActive()) return;
+        saveManager.preValidateAndLoad(
+            slot,
+            roomCache,
+            envelope -> {
+                transitionManager.startCustomTransition(() -> performCheckpointSwap(envelope));
+            },
+            () -> {
+                Log.error(LogCategory.ENGINE, "Failed to load checkpoint from slot '%s'. Current state untouched.", slot);
+            }
+        );
+    }
+
+    public void loadCheckpointImmediate(String slot) {
+        SaveEnvelope envelope = saveManager.loadSaveWithFallback(slot);
+        if (envelope != null) {
+            performCheckpointSwap(envelope);
+        }
+    }
+
+    private void performCheckpointSwap(SaveEnvelope envelope) {
+        SavePayload data = envelope.data();
+        String targetRoomId = data.currentRoomId();
+        String spId = data.savepointInstanceId();
+
+        // 1. replace roomStateStore with save's room records
+        roomStateStore.restoreRoomRecords(data.roomRecords());
+
+        // 2. set global flags from save, retaining untouched defaults for missing ones
+        flagStore.restoreSavedGlobalFlags(data.globalFlags());
+
+        // 3. reset session and room_temp flags to defaults
+        flagStore.resetSessionAndRoomTemp();
+
+        // 4. load room and spawn entities (evaluating spawnCondition against new flags)
+        Room nextRoom = roomCache.get(targetRoomId);
+        if (nextRoom == null) {
+            try {
+                nextRoom = RoomLoader.load(roomsDir.resolve(targetRoomId + ".json"));
+                roomCache.put(nextRoom, roomsDir.resolve(targetRoomId + ".json"));
+            } catch (Exception e) {
+                Log.error(LogCategory.DATA, "Failed loading room '%s' during checkpoint swap: %s", targetRoomId, e.getMessage());
+                return;
+            }
+        }
+        this.currentRoom = nextRoom;
+        this.currentGrid = roomGrids.computeIfAbsent(nextRoom.id(), id -> RoomGridBuilder.build(roomCache.get(id), loadedTilesets, TILE_SIZE));
+
+        // Despawn local entities & re-spawn with new conditions
+        world.despawnRoomLocalEntities();
+        spawnRoomLocalEntities();
+
+        // 5. spawn player at savepoint, zeroing velocities and resetting previous-position state
+        long spEntityId = world.findEntityByInstanceId(spId);
+        int spawnX = 80;
+        int spawnY = 16;
+        if (spEntityId != EntityId.NULL_ID) {
+            BodyComponent spb = world.getBody(spEntityId);
+            if (spb != null) {
+                spawnX = spb.x;
+                spawnY = spb.y;
+            }
+        }
+        BodyComponent pb = world.getBody(playerId);
+        if (pb != null) {
+            pb.x = spawnX;
+            pb.y = spawnY;
+            pb.prevX = spawnX;
+            pb.prevY = spawnY;
+            pb.vx = 0f;
+            pb.vy = 0f;
+            pb.subpixelX = 0f;
+            pb.subpixelY = 0f;
+            pb.grounded = true;
+        }
+        JumpStateComponent js = world.getJumpState(playerId);
+        if (js != null) {
+            js.reset();
+        }
+
+        // Camera follow reset
+        camera.reset(spawnX, spawnY, currentRoom.width(), currentRoom.height(), TILE_SIZE);
+
+        Log.info(LogCategory.ENGINE, "Checkpoint loaded from slot '%s' at %s (%s)", saveSlot, targetRoomId, spId);
+        lastSaveNotice = "Checkpoint Loaded";
+        saveNoticeTicks = 120;
+    }
+
     public void pollWatcher() {
         if (roomWatcher != null) {
             roomWatcher.checkAndReload();
@@ -400,6 +570,23 @@ public final class DemoSceneM5b implements Disposable {
             int pY = Snap.lerpAndSnap(plat.prevY, plat.currentY, alpha) - camY;
             batch.setColor(Color.valueOf("#f39c12"));
             batch.draw(platformTexture, pX, pY, plat.width, plat.height);
+            batch.setColor(Color.WHITE);
+        }
+
+        // Render Savepoints (#00ffaa)
+        for (int i = 1; i < World.MAX_ENTITIES; i++) {
+            if (!world.isAliveIndex(i)) continue;
+            SavepointComponent sp = world.getSavepointByIndex(i);
+            if (sp == null || !sp.active) continue;
+            BodyComponent spBody = world.getBodyByIndex(i);
+            ColliderComponent spCol = world.getColliderByIndex(i);
+            if (spBody == null || spCol == null) continue;
+
+            int sx = spBody.x + spCol.offsetX - camX;
+            int sy = spBody.y + spCol.offsetY - camY;
+            batch.setColor(Color.valueOf("#00ffaa"));
+            batch.draw(savepointTexture, sx, sy, spCol.width, spCol.height);
+            drawRectOutline(batch, sx, sy, spCol.width, spCol.height);
             batch.setColor(Color.WHITE);
         }
 
@@ -460,6 +647,18 @@ public final class DemoSceneM5b implements Disposable {
             debugFont.draw(batch, hudText, 6, VIRTUAL_HEIGHT - 6);
             debugFont.setColor(Color.WHITE);
         }
+
+        if (savepointSystem.isPlayerOverlappingSavepoint(world)) {
+            debugFont.setColor(Color.YELLOW);
+            debugFont.draw(batch, "[E] Save Checkpoint", 100, 30);
+            debugFont.setColor(Color.WHITE);
+        }
+
+        if (saveNoticeTicks > 0 && lastSaveNotice != null) {
+            debugFont.setColor(Color.GREEN);
+            debugFont.draw(batch, lastSaveNotice, 120, 160);
+            debugFont.setColor(Color.WHITE);
+        }
     }
 
     private void drawRectOutline(SpriteBatch batch, int x, int y, int w, int h) {
@@ -517,6 +716,14 @@ public final class DemoSceneM5b implements Disposable {
         return currentRoom;
     }
 
+    public FlagRegistry getFlagRegistry() {
+        return flagRegistry;
+    }
+
+    public FlagStore getFlagStore() {
+        return flagStore;
+    }
+
     public Map<String, Tileset> getLoadedTilesets() {
         return loadedTilesets;
     }
@@ -529,12 +736,27 @@ public final class DemoSceneM5b implements Disposable {
         return roomsDir;
     }
 
+    public SaveManager getSaveManager() {
+        return saveManager;
+    }
+
+    public SavepointSystem getSavepointSystem() {
+        return savepointSystem;
+    }
+
+    public void setSaveSlot(String slot) {
+        if (slot != null && !slot.isBlank()) {
+            this.saveSlot = slot;
+        }
+    }
+
     @Override
     public void dispose() {
         if (tilesetTextureA != null) tilesetTextureA.dispose();
         if (tilesetTextureB != null) tilesetTextureB.dispose();
         if (playerTexture != null) playerTexture.dispose();
         if (platformTexture != null) platformTexture.dispose();
+        if (savepointTexture != null) savepointTexture.dispose();
         if (debugPixelTexture != null) debugPixelTexture.dispose();
         if (debugFont != null) debugFont.dispose();
         if (textureProvider != null) textureProvider.dispose();

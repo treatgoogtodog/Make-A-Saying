@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "id": "savepoint",
+  "tags": [
+    "savepoint",
+    "trigger"
+  ],
+  "debugColor": "#00FFAA",
+  "placeable": true,
+  "components": {
+    "body": {
+      "x": 0,
+      "y": 0
+    },
+    "collider": {
+      "width": 16,
+      "height": 24,
+      "offsetX": -8,
+      "offsetY": 0
+    },
+    "savepoint": {},
+    "room_scope": {
+      "scope": "ROOM_LOCAL"
+    }
+  }
+}

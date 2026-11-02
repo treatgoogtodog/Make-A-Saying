@@ -17,3 +17,8 @@ Thumbs.db
 
 # Replay recordings / runtime logs if local
 logs/
+
+# Local editor settings and caches
+.makeasaying/
+imgui.ini
+*.ini

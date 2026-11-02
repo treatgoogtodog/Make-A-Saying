@@ -1,0 +1,18 @@
+{
+  "version" : 1,
+  "gameVersion" : "0.1.0",
+  "checksum" : "bac2ff8c7abc675382f0e5f8ec64daa206b095156e3983fe309a35d7814c4f99",
+  "data" : {
+    "playtimeTicks" : 0,
+    "timestampUtc" : "2026-11-02T08:00:00Z",
+    "currentRoomId" : "test_01",
+    "savepointInstanceId" : "savepoint_3",
+    "globalFlags" : {
+      "test.unread_flag" : false,
+      "test.stage" : 0
+    },
+    "roomRecords" : {
+      "test_01" : { }
+    }
+  }
+}

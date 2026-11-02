@@ -25,6 +25,8 @@ public final class RoomDocument {
     private String id;
     private int width;
     private int height;
+    private int entitySeq;
+    private int savedFloor;
 
     private final Map<String, String> tilesetAliases = new LinkedHashMap<>();
     private final Map<RoomLayerType, String[]> layers = new EnumMap<>(RoomLayerType.class);
@@ -96,6 +98,8 @@ public final class RoomDocument {
 
         doc.entities.clear();
         doc.entities.addAll(room.entities());
+        doc.entitySeq = Math.max(1, room.entitySeq());
+        doc.savedFloor = Math.max(0, room.entitySeq() - 1);
 
         doc.undoStack.markSaved();
         return doc;
@@ -119,6 +123,7 @@ public final class RoomDocument {
             id,
             width,
             height,
+            entitySeq,
             new LinkedHashMap<>(tilesetAliases),
             layerMap,
             new ArrayList<>(spawnPoints),
@@ -138,6 +143,59 @@ public final class RoomDocument {
     public List<RoomExit> getExits() { return exits; }
     public List<RoomEntityData> getEntities() { return entities; }
     public UndoStack getUndoStack() { return undoStack; }
+
+    public int getEntitySeq() { return entitySeq; }
+    public void setEntitySeq(int entitySeq) { this.entitySeq = entitySeq; }
+
+    public int getSavedFloor() { return savedFloor; }
+    public void setSavedFloor(int savedFloor) { this.savedFloor = savedFloor; }
+
+    public void updateSavedFloorOnSave() {
+        this.savedFloor = Math.max(this.savedFloor, this.entitySeq - 1);
+        undoStack.markSaved();
+    }
+
+    public int allocateEntitySeq() {
+        return entitySeq++;
+    }
+
+    public void restoreEntitySeq(int seq) {
+        // DEC-028: Suffixes that have reached disk are never reused
+        this.entitySeq = Math.max(this.savedFloor + 1, seq);
+    }
+
+    public void addEntity(RoomEntityData entity) {
+        if (entity == null) return;
+        entities.add(entity);
+    }
+
+    public RoomEntityData removeEntity(String instanceId) {
+        for (int i = 0; i < entities.size(); i++) {
+            if (entities.get(i).instanceId().equals(instanceId)) {
+                return entities.remove(i);
+            }
+        }
+        return null;
+    }
+
+    public RoomEntityData getEntity(String instanceId) {
+        for (RoomEntityData ed : entities) {
+            if (ed.instanceId().equals(instanceId)) {
+                return ed;
+            }
+        }
+        return null;
+    }
+
+    public void setEntity(String instanceId, RoomEntityData updated) {
+        for (int i = 0; i < entities.size(); i++) {
+            if (entities.get(i).instanceId().equals(instanceId)) {
+                entities.set(i, updated);
+                return;
+            }
+        }
+        entities.add(updated);
+    }
 
     public boolean isLayerLocked(RoomLayerType type) {
         return layerLocked.getOrDefault(type, false);

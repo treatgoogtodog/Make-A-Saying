@@ -121,6 +121,7 @@ public final class RoomViewport implements Disposable {
 
         renderSpawnPoints(doc);
         renderExits(doc);
+        renderEntities(state, doc);
         renderToolPreview(state);
 
         if (state.isShowViewRect()) {
@@ -213,6 +214,64 @@ public final class RoomViewport implements Disposable {
         if (ts == null) return TileShape.SOLID;
         TileDef def = ts.tiles().get(parts[1]);
         return def != null ? def.shape() : TileShape.SOLID;
+    }
+
+    private void renderEntities(RoomEditorState state, RoomDocument doc) {
+        String selectedId = state.getSelectionModel().getSelectedInstanceId();
+
+        for (com.makeasaying.engine.world.RoomEntityData ed : doc.getEntities()) {
+            com.makeasaying.engine.entity.EntityDefinition def = state.getEntityDefs().get(ed.definition());
+            com.makeasaying.editor.map.model.SelectionModel.EntityHitBox hitBox =
+                com.makeasaying.editor.map.model.SelectionModel.computeHitBox(ed, def);
+
+            boolean isSelected = ed.instanceId().equals(selectedId);
+
+            // Fill color
+            if (isSelected) {
+                batch.setColor(1.0f, 0.9f, 0.2f, 0.6f);
+            } else {
+                batch.setColor(0.27f, 0.53f, 1.0f, 0.5f);
+            }
+            batch.draw(pixelTexture, hitBox.left(), hitBox.bottom(), hitBox.width(), hitBox.height());
+
+            // 1px outline
+            batch.setColor(isSelected ? Color.YELLOW : Color.CYAN);
+            batch.draw(pixelTexture, hitBox.left(), hitBox.bottom(), hitBox.width(), 1);
+            batch.draw(pixelTexture, hitBox.left(), hitBox.bottom() + hitBox.height() - 1, hitBox.width(), 1);
+            batch.draw(pixelTexture, hitBox.left(), hitBox.bottom(), 1, hitBox.height());
+            batch.draw(pixelTexture, hitBox.left() + hitBox.width() - 1, hitBox.bottom(), 1, hitBox.height());
+
+            // Label
+            batch.setColor(Color.WHITE);
+            font.setColor(isSelected ? Color.YELLOW : Color.WHITE);
+            font.draw(batch, ed.instanceId(), hitBox.left(), hitBox.bottom() + hitBox.height() + 12);
+
+            // If selected platform, draw trajectory line and endpoint handle
+            if (isSelected) {
+                com.makeasaying.editor.map.model.GizmoModel.PlatformGizmo gizmo =
+                    com.makeasaying.editor.map.model.GizmoModel.computePlatformGizmo(ed, def);
+                if (gizmo != null) {
+                    batch.setColor(0.3f, 1.0f, 0.3f, 0.8f);
+                    drawLine(batch, gizmo.startX(), gizmo.startY(), gizmo.endX(), gizmo.endY());
+
+                    batch.setColor(Color.GREEN);
+                    batch.draw(pixelTexture, gizmo.endX() - 4, gizmo.endY() - 4, 8, 8);
+                    batch.setColor(Color.WHITE);
+                    font.setColor(Color.GREEN);
+                    font.draw(batch, "End (" + gizmo.travelX() + "," + gizmo.travelY() + ")", gizmo.endX() + 6, gizmo.endY() + 6);
+                }
+            }
+        }
+        batch.setColor(Color.WHITE);
+    }
+
+    private void drawLine(SpriteBatch batch, float x1, float y1, float x2, float y2) {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float dist = (float) Math.sqrt(dx * dx + dy * dy);
+        if (dist <= 0.001f) return;
+        float angle = (float) Math.toDegrees(Math.atan2(dy, dx));
+        batch.draw(pixelTexture, x1, y1, 0, 0, dist, 1, 1, 1, angle, 0, 0, 1, 1, false, false);
     }
 
     private void renderSpawnPoints(RoomDocument doc) {

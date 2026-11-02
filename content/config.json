@@ -17,5 +17,7 @@
     "width": 12,
     "standingHeight": 36,
     "crouchedHeight": 22
-  }
+  },
+  "saveSlot": "slot_1",
+  "continueOnStart": false
 }

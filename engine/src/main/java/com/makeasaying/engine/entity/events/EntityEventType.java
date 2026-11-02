@@ -4,5 +4,6 @@ public enum EntityEventType {
     LANDED,
     HIT_WALL,
     HIT_CEILING,
-    CRUSHED
+    CRUSHED,
+    FLAG_CHANGED
 }
